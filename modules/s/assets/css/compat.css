@@ -1,0 +1,31 @@
+/*
+ * compat.css — 兼容层 / 老内核降级
+ * 目标：微信/QQ/钉钉 X5（Chromium 57-66 及更早）及旧版系统浏览器。
+ * 已全局避免 gap / inset / min() / clamp() / 未加前缀 backdrop-filter。
+ * 本文件做兜底：关闭重动画、保证最小可读字号、flex 不可用时退化为块级。
+ */
+@media (prefers-reduced-motion: reduce) {
+  * { -webkit-animation: none !important; animation: none !important; -webkit-transition: none !important; transition: none !important; }
+}
+
+/* 极老内核：关闭关键帧动画，避免卡顿 */
+.old-kernel .confetti, .old-kernel .conf, .old-kernel .spark,
+.old-kernel .em, .old-kernel .e, .old-kernel .q.pulse { -webkit-animation: none !important; animation: none !important; }
+.old-kernel .em.gone { opacity: 0 !important; }
+.old-kernel .eqbar .e-ans { -webkit-transform: scale(1) !important; transform: scale(1) !important; }
+
+/* 不支持 flex 时的退化（用 inline-block 行内排列） */
+.no-flex .nav, .no-flex .entry-grid, .no-flex .modebar, .no-flex .row,
+.no-flex .numctrl, .no-flex .emo-row, .no-flex .tabs, .no-flex .scorebar,
+.no-flex .ghead, .no-flex .match, .no-flex .chargrid, .no-flex .kpwrap, .no-flex .ab-controls {
+  display: block !important;
+}
+.no-flex .nav a, .no-flex .entry-card, .no-flex .modebar .mbtn,
+.no-flex .tab, .no-flex .ltab, .no-flex .opt, .no-flex .charcard, .no-flex .kpcol, .no-flex .match .col {
+  display: inline-block !important;
+  vertical-align: top;
+}
+
+/* 保证最小字号与触控目标 */
+.btn, .opt, .lv, .mbtn, .numctrl button, .cmpbtns button { -webkit-tap-highlight-color: transparent; }
+input, button, select { font-size: 16px; }

@@ -1,0 +1,12 @@
+{
+  "name": "oqt-quant-node",
+  "version": "1.0.0",
+  "description": "E:\\oqt-quant-latest 的 Node.js 一比一语言转换版（十层架构，DLL→Node组件，无 nginx）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tools/tests/run.js"
+  },
+  "engines": { "node": ">=22" },
+  "license": "UNLICENSED"
+}

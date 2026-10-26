@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>语音诊断页 · 一年级学习乐园</title>
+<style>
+  body{font-family:-apple-system,system-ui,"Microsoft YaHei",sans-serif;margin:0;padding:14px;background:#f4f8ff;color:#234}
+  h1{font-size:19px;margin:2px 0 10px}
+  .box{background:#fff;border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  button{font-size:16px;padding:12px 14px;margin:5px 3px;border:0;border-radius:12px;background:#4f8cff;color:#fff;cursor:pointer}
+  button.sec{background:#ffd54f;color:#333}
+  button.dg{background:#66bb6a;color:#fff}
+  #log{padding:10px;border-radius:10px;background:#0d1b2a;color:#cfe8ff;font-size:13px;line-height:1.6;white-space:pre-wrap;font-family:Consolas,Menlo,monospace;max-height:46vh;overflow:auto}
+  code{color:#ffd54f}
+</style>
+<link rel="stylesheet" href="/web/css/overview.css">
+</head>
+<body>
+<h1>🔊 语音诊断页（手机专用）</h1>
+<div class="box">
+  <button id="b-wa" class="dg">① WebAudio 播放</button>
+  <button id="b-au" class="sec">② &lt;audio&gt; 播放</button>
+  <button id="b-syn">③ 本机语音合成</button>
+  <button id="b-net" class="dg">④ 测网络拉取 MP3</button>
+  <button id="b-unlock">⑤ 手动解锁声音</button>
+</div>
+<div class="box"><div id="log">正在加载音频清单…</div></div>
+
+<script src="assets/audio/manifest.js"></script>
+<script>
+var M = window.__AUDIO_MANIFEST__ || {};
+var keys = Object.keys(M);
+var log = document.getElementById('log');
+function L(s){ log.textContent += "\n" + s; log.scrollTop = log.scrollHeight; }
+function clear(){ log.textContent = ""; }
+
+if (keys.length) {
+  L("✅ 已加载 "+keys.length+" 条预生成音频（台湾女声 HsiaoChen）");
+} else {
+  L("⚠️ 没找到预生成音频清单（manifest.js 未加载？）");
+}
+L("UA: " + (navigator.userAgent || "?"));
+L("AudioContext: " + ("AudioContext" in window || "webkitAudioContext" in window ? "支持" : "不支持"));
+L("fetch: " + ("fetch" in window ? "支持" : "不支持"));
+L("speechSynthesis: " + ("speechSynthesis" in window ? "支持" : "不支持"));
+
+function firstKey(){ return keys[0]; }
+function urlOf(i){ return M[keys[i % keys.length]] || M[keys[0]]; }
+function textOf(i){ return keys[i % keys.length] || keys[0]; }
+
+/* ① WebAudio：fetch → decodeAudioData → start（移动端最稳） */
+document.getElementById('b-wa').onclick = function(){
+  clear();
+  var url = urlOf(0);
+  L("① WebAudio 播放：" + textOf(0));
+  L("URL: " + url);
+  if (!("AudioContext" in window) && !("webkitAudioContext" in window)) { L("❌ 此浏览器不支持 AudioContext"); return; }
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var ctx = new AC();
+  L("AudioContext 初始状态: " + ctx.state);
+  ctx.resume().then(function(){ L("✅ resume() 完成，状态: " + ctx.state); }).catch(function(e){ L("resume 失败: " + e.message); });
+  L("… fetch 中");
+  fetch(url).then(function(r){
+    L("fetch 状态: " + r.status + " " + r.statusText);
+    if (!r.ok) { L("❌ 网络拉取失败（可能手机访问不了 github.io）"); return null; }
+    return r.arrayBuffer();
+  }).then(function(ab){
+    if (!ab) return;
+    L("✅ 已拿到音频数据 (" + ab.byteLength + " 字节)，decode 中…");
+    ctx.decodeAudioData(ab, function(buf){
+      L("✅ decode 成功，时长 " + buf.duration.toFixed(2) + "s，start() 播放");
+      var src = ctx.createBufferSource();
+      src.buffer = buf; src.connect(ctx.destination);
+      src.onended = function(){ L("✅ 播放结束（你听到了吗？）"); };
+      src.start(0);
+    }, function(err){
+      L("❌ decode 失败: " + (err && err.message ? err.message : err));
+    });
+  }).catch(function(e){ L("❌ fetch 异常: " + e.message); });
+};
+
+/* ② 原生 <audio> 播放（对比用） */
+document.getElementById('b-au').onclick = function(){
+  clear();
+  var url = urlOf(7);
+  L("② &lt;audio&gt; 播放：" + textOf(7));
+  L("URL: " + url);
+  var a = new Audio();
+  a.src = url;
+  var p = a.play();
+  L("… a.play() 已调用");
+  if (p && p.catch) p.catch(function(){ L("❌ play() 被拦截（自动播放策略）：请先点⑤解锁或点一下页面"); });
+  a.onended = function(){ L("✅ &lt;audio&gt; 播放完成（你听到了吗？）"); };
+  a.onerror = function(){ L("❌ &lt;audio&gt; 加载/播放错误（可能网络拉不到）"); };
+};
+
+/* ③ 本机语音合成 */
+document.getElementById('b-syn').onclick = function(){
+  clear();
+  if (!("speechSynthesis" in window)) { L("❌ 此浏览器不支持本机语音合成"); return; }
+  L("③ 调用 speechSynthesis…");
+  var u = new SpeechSynthesisUtterance("你好，我是你的朗读小老师。");
+  u.lang = "zh-CN"; u.rate = 0.95;
+  u.onend = function(){ L("✅ 本机语音合成结束（你听到了吗？）"); };
+  u.onerror = function(e){ L("❌ 本机语音合成出错: " + (e.error || e.message)); };
+  window.speechSynthesis.speak(u);
+};
+
+/* ④ 仅测网络：能否拉到 MP3（区分"网络不通"还是"播放被拦"） */
+document.getElementById('b-net').onclick = function(){
+  clear();
+  var url = urlOf(0);
+  L("④ 测试网络拉取：" + url);
+  fetch(url).then(function(r){
+    L("HTTP 状态: " + r.status + " " + r.statusText);
+    return r.arrayBuffer();
+  }).then(function(ab){
+    if (!ab) return;
+    L("✅ 成功拉到 " + ab.byteLength + " 字节 → 网络没问题，问题在播放策略");
+  }).catch(function(e){ L("❌ 拉取失败: " + e.message + " → 可能是手机访问不了 github.io（需换音频托管）"); });
+};
+
+/* ⑤ 手动解锁：先 resume AudioContext + 用 <audio> 静音 play 一次 */
+document.getElementById('b-unlock').onclick = function(){
+  clear();
+  L("⑤ 手动解锁声音…");
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) { var c = new AC(); c.resume().then(function(){ L("✅ AudioContext resumed: " + c.state); }); }
+  } catch(e){ L("AC 解锁异常: " + e.message); }
+  try {
+    var a = new Audio();
+    a.src = "data:audio/mpeg;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA";
+    a.play().then(function(){ L("✅ &lt;audio&gt; 静音解锁成功"); }).catch(function(e){ L("&lt;audio&gt; 解锁被拦: " + e.message); });
+  } catch(e){ L("&lt;audio&gt; 解锁异常: " + e.message); }
+  L("现在再去点 ① 或 ② 试试");
+};
+</script>
+
+<script src="/web/js/announcer.js"></script>
+<script src="/web/js/page-common.js"></script>
+<script>
+/* ★全站自动播报：学习乐园打开也播报最新行情摘要 */
+(function(){
+  if(window.PageCommon) window.PageCommon.showLoader("正在准备学习内容…");
+  if(!window.Announcer) return;
+  function go(){
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', go);
+  else go();
+})();
+</script>
+</body>
+</html>

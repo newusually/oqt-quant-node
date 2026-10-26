@@ -1,0 +1,33 @@
+/*
+ * social.css — 组件层 / 成长小课堂（霸凌应对 · 人际交往 · 学习方法 · 做人处事）
+ */
+.gcard {
+  background: #ffffff;
+  border-radius: 18px;
+  -webkit-box-shadow: 0 5px 14px rgba(120, 90, 40, 0.12);
+  box-shadow: 0 5px 14px rgba(120, 90, 40, 0.12);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-left: 6px solid #ffb74d;
+}
+.ghead {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.gicon { font-size: 30px; margin-right: 10px; }
+.ghead > div { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; }
+.gcat { font-size: 12px; color: #fff; background: #26c6da; display: inline-block; padding: 2px 8px; border-radius: 10px; }
+.gtitle { font-size: 18px; color: #e65100; font-weight: bold; margin-top: 2px; }
+.ghead .spk { margin-left: 8px; }
+.gstory { font-size: 15px; color: #5d4037; line-height: 1.8; background: #fff8ef; border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.gtip { background: #e8f8ec; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #33691e; }
+.gtip b { color: #2e7d32; }
+.gtip ul { margin-top: 4px; }
+.gtip li { margin: 4px 0 4px 18px; list-style: disc; }
+.gquiz { margin-top: 10px; }
+.gquiz .qtext { font-size: 16px; color: #4a3b2a; margin-bottom: 6px; }

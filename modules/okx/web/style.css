@@ -1,0 +1,160 @@
+:root{--bg:#0f1420;--panel:#161c2b;--panel2:#1b2436;--txt:#e7ecf5;--txt2:#8b94ad;--line:#26304a;--up:#ef4b4b;--dn:#21ba72;--accent:#4d8dff;--e12:#ff9f43;--e26:#4d7bff;--dif:#ff9f43;--dea:#4d7bff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif}
+a{color:var(--accent);text-decoration:none}
+.topbar{display:flex;align-items:center;gap:18px;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.logo{font-weight:700;font-size:18px}.logo b{color:var(--accent)}
+.topbar nav{display:flex;gap:14px}
+.topbar nav a{color:var(--txt2)}.topbar nav a.on,.topbar nav a:hover{color:var(--txt)}
+.env{margin-left:auto;display:flex;gap:14px;color:var(--txt2);align-items:center}
+
+/* 布局: 侧栏 + 主内容 */
+.lay{display:flex;flex-direction:column;max-width:1480px;margin:0 auto;padding:0 4px}
+/* ★顶部三栏（用户 2026-10-25: "实时买卖队列给我放到列表上面 然后合约列表放在买卖队列的右边
+   买卖信号面板放在合约列表的右边 其他的比如K线图在这些下面开始摆放"）
+   左: 实时买卖队列 / 中: 合约列表(原宽 248×2=496) / 右: 买卖信号面板; 三栏拉通到页面底部 */
+/* ★★★三栏等高（用户 2026-10-25: "合约列表高度应该和买卖队列加起来的长度一模一样
+ *   也和右边买卖信号列表一样高度 这三个面板下面才是K线图"）
+ *   根因（实测渲染）：之前用 min-height + height:auto → 侧栏内容(507 合约)把整页撑到
+ *   37075px，买队列被推到 18690px（视口外）→ 用户只看得见卖队列。
+ *   修法：改成【固定 height】(不是 min-height)，三栏统一 calc(100vh - 110px)，
+ *        内部列表/队列各自 overflow:auto 滚动 → 三栏真正等高，下面才是 K 线图。 */
+.top3{display:grid;grid-template-columns:minmax(300px,1fr) 496px minmax(300px,1fr);gap:14px;align-items:stretch;margin-top:14px;height:calc(100vh - 110px);min-height:0}
+.top3>.panel{margin-bottom:0}
+/* 三栏内部: 面板纵向撑满, 买卖队列/信号表随栏高滚动(不截断) */
+.top3>.panel{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.top3 .book-wrap{flex:1;min-height:0}
+.top3 .book-col{flex:1;min-height:0}
+.top3 .book-rows{flex:1;overflow:auto;min-height:0}
+.top3 .tb-scroll{flex:1;max-height:none;min-height:220px;overflow:auto}
+/* ★侧栏：固定高度（不是 auto）→ 内部 inst-list 滚动，三栏等高 */
+.side{width:496px;flex:none;position:static;height:calc(100vh - 110px);min-height:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;overflow:hidden}
+/* ★侧栏可折叠：默认只显示几行, 点标题展开可滑动下拉 */
+.side-h{padding:12px 14px 8px;font-weight:700;font-size:14px}
+.side-h .muted{font-weight:400;font-size:12px}
+.side-h-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.side-h-toggle:hover{background:var(--panel2)}
+.side-caret{color:var(--txt2);font-size:11px;transition:transform .22s}
+.side.collapsed .side-caret{transform:rotate(-90deg)}
+/* ★折叠时仍显示 6 行缩略（用户要求「列表只是显示几行就行」） */
+.side.collapsed .side-body{display:flex;max-height:266px;overflow:hidden;position:relative}
+.side.collapsed .side-body::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:58px;
+  background:linear-gradient(to bottom, rgba(17,21,34,0), var(--panel) 88%);
+  pointer-events:none;
+}
+.side.collapsed .inst-search{display:none}
+.side.collapsed .inst-list{padding-bottom:26px}
+.side.collapsed{height:auto;align-self:flex-start;max-height:calc(100vh - 53px)}.side-body{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden}
+.inst-search{margin:0 12px 8px;padding:7px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--txt);font-size:13px;width:calc(100% - 24px)}
+/* ★合约分类标签（用户 2026-10-25: 合约列表按加密生态板块分类） */
+.inst-cats{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 8px}
+.inst-cats .icat{display:inline-flex;align-items:center;gap:4px;padding:3.5px 8px;font-size:11.5px;font-weight:600;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--txt2);cursor:pointer;user-select:none;white-space:nowrap;transition:all .15s}
+.inst-cats .icat:hover{border-color:var(--accent);color:var(--txt)}
+.inst-cats .icat.on{background:rgba(77,141,255,.18);border-color:var(--accent);color:var(--accent)}
+.inst-cats .icat i{font-style:normal;font-size:10px;opacity:.65;font-variant-numeric:tabular-nums}
+.inst-cats .isub-sep{width:100%;height:0;border-top:1px dashed var(--line);margin:1px 0}
+.inst-cats .isub{padding:2.5px 7px;font-size:11px;opacity:.85}
+.inst-cats .isub.on{opacity:1}
+/* ★必须加 min-height:0 —— flex item 默认 min-height:auto 会让内容高度成为下限,
+   507 个合约把整个页面撑到 37075px, 买队列被推到 18690px(页面外)看不见 */
+.inst-list{flex:1;min-height:0;overflow:auto;padding:0 8px 12px}
+.inst-item{padding:7px 10px;border-radius:7px;cursor:pointer;display:flex;flex-direction:column;gap:1px;margin-bottom:2px}
+.inst-item:hover{background:var(--panel2)}
+.inst-item.on{background:rgba(77,141,255,.18);outline:1px solid var(--accent)}
+.inst-item .ii-name{font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.inst-item .ii-fam{font-size:11px}
+/* ★实时价格行: 四位小数 + 涨/跌箭头 + 红绿 */
+.ii-px{font-size:12.5px;font-variant-numeric:tabular-nums;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ii-arrow{font-size:10px;flex:0 0 auto}
+.ii-chg{font-size:11px;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.ii-up{color:#f0334b}
+.ii-dn{color:#0bbf7a}
+.ii-flash-up{animation:ii-fu .8s ease-out}
+.ii-flash-dn{animation:ii-fd .8s ease-out}
+@keyframes ii-fu{from{background:rgba(240,51,75,.34)}to{background:transparent}}
+@keyframes ii-fd{from{background:rgba(11,191,122,.34)}to{background:transparent}}
+
+/* ★实时买卖队列 */
+.book-wrap{display:flex;flex-direction:column;gap:4px}
+.book-col{display:flex;flex-direction:column}
+/* ★表头与数据行必须用完全相同的三列: 档位(58) | 价格(92,右对齐) | 数量(1fr,右对齐) */
+.book-h{display:grid;grid-template-columns:58px 92px 1fr;gap:6px;padding:5px 6px;font-size:11px;color:var(--txt2);border-bottom:1px solid var(--line)}
+.book-h .r{text-align:right}
+.book-rows{display:flex;flex-direction:column}
+.book-row{display:grid;grid-template-columns:58px 92px 1fr;gap:6px;padding:3.5px 6px;font-size:12px;font-variant-numeric:tabular-nums;position:relative}
+.book-row .r{text-align:right}
+.book-row .px{text-align:right}
+/* ★深度条必须 absolute(不占网格), 同时行内要有 3 个 in-flow 元素: 档位/价格/数量
+   —— 否则 价格/数量 会各往前挪一列, 与表头错位(用户反馈的布局问题) */
+.book-row .dep{position:absolute;right:0;top:0;bottom:0;opacity:.14;border-radius:3px}
+.book-row .bd-no{font-size:11px;color:var(--txt2);font-variant-numeric:tabular-nums}
+.book-row.ask .px{color:#f0334b}
+.book-row.bid .px{color:#0bbf7a}
+.book-row .sz{color:var(--txt2)}
+/* 中间: 最新价/价差 + ★买盘卖盘比例总结行(用户 2026-10-25 要求) */
+.book-mid{display:flex;flex-direction:column;gap:6px;padding:7px 8px;margin:5px 0;border-radius:7px;background:var(--panel2);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.bm-px{display:flex;align-items:center;justify-content:space-between}
+.book-ratio{display:flex;flex-direction:column;gap:4px}
+.bkr-t{display:flex;justify-content:space-between;font-size:11px;font-weight:600}
+.bkr-t .up{color:#f0334b}
+.bkr-t .dn{color:#0bbf7a}
+.bkr-b{display:flex;height:7px;border-radius:4px;overflow:hidden;background:rgba(139,148,173,.16)}
+.bkr-buy{background:#0bbf7a}
+.bkr-sell{background:#f0334b}
+
+/* ★持仓监控 */
+.pos-sum{margin-top:9px;padding:8px 11px;border-radius:8px;background:var(--panel2);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+
+.wrap{flex:1;min-width:0;padding:18px 6px}
+.page-title{font-size:20px;font-weight:700;margin-bottom:14px}
+.page-title small{font-weight:400;color:var(--txt2);font-size:13px;margin-left:8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.panel h3{margin:0 0 10px;font-size:15px}
+.tf-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.tf-bar .sep{width:1px;height:18px;background:var(--line);margin:0 2px}
+.tf-grp{display:inline-flex;gap:4px}
+.tf-grp a{padding:3px 9px;border-radius:6px;background:var(--panel2);color:var(--txt2);font-size:13px}
+.tf-grp a.on,.tf-grp a:hover{background:var(--accent);color:#fff}
+.lbl{color:var(--txt2);font-size:13px;display:inline-flex;align-items:center;gap:5px}
+.ind-sel{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}.btn:disabled{opacity:.55;cursor:default}
+.chart{width:100%;height:480px;display:block;background:#0b0f18;border-radius:8px}
+.chart.sm{height:240px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--txt2)}
+.legend .lg{display:inline-flex;align-items:center;gap:5px}
+.legend .lg::before{content:"";width:12px;height:3px;border-radius:2px;display:inline-block}
+.legend .lg.up::before{background:var(--up)}.legend .lg.dn::before{background:var(--dn)}
+.legend .lg.e12::before{background:#8b5cf6}.legend .lg.e26::before{background:#3d7bff}.legend .lg.dif2::before{background:#f0a020}.legend .lg.dea2::before{background:#3d7bff}
+.legend .lg.dif::before{background:var(--dn)}.legend .lg.dea::before{background:var(--up)}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g21{grid-template-columns:1fr 1fr}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stat .k{color:var(--txt2);font-size:12px}.stat .v{font-size:26px;font-weight:700;margin:4px 0}.stat .s{color:var(--txt2);font-size:12px}
+.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th,.tb td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+.tb th{color:var(--txt2);font-weight:500;position:sticky;top:0;background:var(--panel)}
+.tb .r{text-align:right}.tb .c{text-align:center}
+.tb-scroll{max-height:420px;overflow:auto}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px}
+.badge.buy{background:rgba(239,75,75,.15);color:var(--up)}
+.badge.sell{background:rgba(33,186,114,.15);color:var(--dn)}
+.loading,.empty{color:var(--txt2);padding:12px;text-align:center}
+.foot{text-align:center;color:var(--txt2);font-size:12px;padding:24px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--txt2);font-weight:400}
+#toast{position:fixed;top:64px;right:20px;z-index:99;padding:8px 16px;border-radius:7px;font-size:13px;background:#1b2336;border:1px solid var(--line);color:var(--txt);box-shadow:0 4px 16px rgba(0,0,0,.4)}
+#toast.bad{border-color:var(--up);color:#ff8a8a}
+@media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.g21{grid-template-columns:1fr}.top3{grid-template-columns:1fr;min-height:0}.side{min-height:0;height:auto;max-height:70vh}}
+@media(max-width:780px){.side{width:100%;flex:none;position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}.inst-list{max-height:220px}}
+
+/* ---------- ★2026-10-25 当前合约概念（ic-*） ---------- */
+.ic-cols{display:grid;grid-template-columns:1fr 340px;gap:14px;margin-top:6px}
+@media(max-width:900px){.ic-cols{grid-template-columns:1fr}}
+.ic-main{min-width:0}
+.ic-cat{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.ic-chip{font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.32);color:#cdb8ff}
+.ic-concept{font-size:13.5px;line-height:1.9;color:var(--txt)}

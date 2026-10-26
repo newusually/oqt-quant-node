@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/web/assets/favicon.svg">
+<title>OKX 永续 · oqt-quant-node</title>
+<link rel="stylesheet" href="/modules/okx/web/style.css">
+<link rel="stylesheet" href="/web/css/overview.css">
+<link rel="stylesheet" href="/web/css/chan-pop.css">
+<link rel="stylesheet" href="/web/css/dock.css">
+<!-- ★2026-10-25: 榜单组件样式（RankPack/Board，与总览页同一套） -->
+<link rel="stylesheet" href="/web/css/boards.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">okx<b>·quant</b></div>
+  <nav>    <a href="/web/index.html">总览</a>
+    <a href="/modules/okx/web/index.html" class="on">OKX</a>
+    <a href="/modules/s/index.html">学习乐园</a>
+  </nav>
+  <div class="env"><button id="btn-dock" class="btn" title="自由布局: 面板可拖动/缩放/悬浮/隐藏/删除">🧩 布局</button> <button id="btn-dock-reset" class="btn" title="复位所有面板">↺ 复位</button> <span id="clock" class="num"></span></div>
+</header>
+
+<div class="lay">
+  <!-- ★顶部双栏（用户 2026-10-25: "实时买卖队列给我放到列表上面 然后合约列表放在买卖队列的右边
+        K线图在这些下面开始摆放 列表宽度变长到原来的2倍"） -->
+  <div class="top3">
+    <!-- 实时买卖队列（左列） -->
+    <div class="panel">
+      <h3>实时买卖队列 <small id="book-sub" class="muted">Order Book</small></h3>
+      <div class="book-wrap">
+        <div class="book-col">
+          <div class="book-h"><span class="up">卖单 (Ask)</span><span class="r">价格</span><span class="r">数量</span></div>
+          <div id="book-asks" class="book-rows"></div>
+        </div>
+        <!-- ★中间: 最新价/价差 + 买盘卖盘比例总结(用户 2026-10-25 要求加的一行) -->
+        <div class="book-mid">
+          <div class="bm-px" id="book-mid">
+            <span class="up">最新价 -</span>
+            <span class="muted">价差 -</span>
+          </div>
+          <div class="book-ratio" id="book-ratio">
+            <div class="bkr-t"><span class="dn">买盘 50.0%</span><span class="up">卖盘 50.0%</span></div>
+            <div class="bkr-b"><b class="bkr-buy" style="width:50%"></b><b class="bkr-sell" style="width:50%"></b></div>
+          </div>
+        </div>
+        <div class="book-col">
+          <div class="book-h"><span class="dn">买单 (Bid)</span><span class="r">价格</span><span class="r">数量</span></div>
+          <div id="book-bids" class="book-rows"></div>
+        </div>
+      </div>
+    </div>
+    <!-- 合约列表侧栏（中列, 宽度 2 倍, 拉通页面底部） -->
+    <aside class="side" id="side">
+      <div class="side-h side-h-toggle" id="side-toggle">
+        <span>合约列表 <span id="inst-count" class="muted">·</span></span>
+        <span class="side-caret" id="side-caret">▼</span>
+      </div>
+      <div class="side-body" id="side-body">
+        <input id="inst-search" class="inst-search" placeholder="搜索合约 / 品种…" autocomplete="off">
+        <!-- ★合约分类标签（用户 2026-10-25: "合约列表也没有分类 okx分了好几类的合约"
+             公链 / 扩容 / DeFi / Meme / AI / 基础设施 / 链游 / 实物资产 分类切换） -->
+        <div id="inst-cats" class="inst-cats"></div>
+        <div id="inst-list" class="inst-list"><div class="loading">加载中…</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="wrap">
+    <div class="page-title">OKX 永续合约 <small id="st-line">ETH-USDT-SWAP · 5m · MA</small></div>
+
+    <div class="panel">
+      <div class="tf-bar">
+        <b id="inst-name">ETH-USDT-SWAP</b>
+        <span class="num" id="inst-price">-</span>
+        <span id="inst-pct" class="num">-</span>
+        <span class="sep"></span>
+        <span class="tf-grp" id="tf-grp"></span>
+        <span class="sep"></span>
+        <label class="lbl">主图
+          <select id="mainInd-sel" class="ind-sel">
+            <option value="ma">MA 均线</option>
+          </select>
+        </label>
+        <label class="lbl">副图
+          <select id="subInd-sel" class="ind-sel">
+            <option value="macd">MACD</option>
+          </select>
+        </label>
+        <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <select id="draw-tool" class="ind-sel" title="绘图工具(右键删图形, Esc退出)">
+            <option value="cursor">✋ 移动</option>
+            <option value="trend">📐 趋势线</option>
+            <option value="hline">➖ 水平线</option>
+            <option value="vline">❘ 垂直线</option>
+            <option value="ray">↗ 射线</option>
+            <option value="rect">▭ 矩形</option>
+            <option value="triangle">🔺 三角形</option>
+            <option value="fib">📐 斐波那契</option>
+          </select>
+          <input id="draw-color" type="color" value="#f0a020" title="画线颜色" style="width:30px;height:26px;padding:0;border:1px solid #263050;background:#12172a;border-radius:6px">
+          <button id="draw-undo" class="btn" title="撤销">↶</button>
+          <button id="draw-clear" class="btn" title="清空">🗑</button>
+          <button id="btn-zoomin" class="btn" title="放大K线(减少显示根数)">＋</button>
+          <button id="btn-zoomout" class="btn" title="缩小K线(增加显示根数)">－</button>
+          <button id="btn-zoommax" class="btn" title="缩小到全部">⤢</button>
+          <span id="zoom-label" class="muted" style="font-size:12px;min-width:52px;text-align:center">100根</span>
+          <button id="btn-backfill" class="btn" title="分页往回拉取最近30天历史K线">⏪ 补30天</button>
+          <button id="btn-live" class="btn">实时获取</button>
+          <button id="btn-more" class="btn">补充数据</button>
+        </span>
+      </div>
+      <canvas id="idxcv" class="chart"></canvas>
+      <div class="legend">
+        <span class="lg ma5">MA5</span>
+        <span class="lg ma10">MA10</span>
+        <span class="lg ma20">MA20</span>
+        <span class="lg ma60">MA60</span>
+      </div>
+      <div id="idx-info" class="muted" style="margin-top:6px;font-size:12px">加载中…</div>
+    </div>
+
+    <!-- ★当前合约概念（用户 2026-10-25: "合约各个介绍和概念都要保存在数据库然后分类"
+         "合约总是可以实时查询的" → 切到任何合约, 这里实时显示它的概念/分类） -->
+    <div class="panel" style="margin-top:16px">
+      <h3>📖 合约概念 <small class="muted" id="ic-sub">实时查询当前合约</small></h3>
+      <div class="ic-cols">
+        <div class="ic-main">
+          <div class="ic-cat" id="ic-cat">-</div>
+          <div class="ic-concept" id="ic-concept">查询中…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:16px">
+      <div class="stat"><div class="k">账户净值(USDT)</div><div class="v num" id="s-eq">-</div><div class="s" id="s-eq-chg">较期初 -</div></div>
+      <div class="stat"><div class="k">累计盈亏(USDT)</div><div class="v num" id="s-pnl">-</div><div class="s">盈亏历史合计</div></div>
+      <div class="stat"><div class="k">成交流水</div><div class="v num" id="s-trades">-</div><div class="s">已实现盈亏合计</div></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h3>账户净值曲线 <small class="muted">真实 OKX 账户 · 已实现盈亏累计</small></h3>
+      <canvas id="eqcv" class="chart sm"></canvas>
+    </div>
+
+    <div class="grid g21" style="margin-top:16px">
+      <div class="panel">
+        <h3>成交流水 <small id="tr-sub" class="muted">0 条</small></h3>
+        <div class="tb-scroll" style="max-height:420px">
+          <table class="tb">
+            <thead><tr><th>时间</th><th>品种</th><th>方向</th><th class="r">价格</th><th class="r">数量</th><th class="r">名义(USD)</th><th class="r">盈亏</th></tr></thead>
+            <tbody id="tr-tb"><tr><td colspan="7" class="empty">暂无成交</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 持仓监控 -->
+      <div class="panel">
+        <h3>持仓监控 <small id="pos-sub" class="muted">实时 OKX 账户</small></h3>
+        <div class="tb-scroll" style="max-height:330px">
+          <table class="tb">
+            <thead><tr><th>品种</th><th class="c">方向</th><th class="r">数量</th><th class="r">开仓价</th><th class="r">标记价</th><th class="r">浮动盈亏</th><th class="r">强平价</th></tr></thead>
+            <tbody id="pos-tb"><tr><td colspan="7" class="empty">暂无持仓</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pos-sum" id="pos-sum">浮动盈亏合计: -</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer class="foot">OKX 永续 · 真实行情(公共接口, 无需凭证) → 本地 node:sqlite 存储 → 本地算指标(MA/MACD) · 蜡烛图+均线 · 纯 Node.js + 原生 JS/AJAX/Canvas</footer>
+
+<!-- ★用户 2026-10-25: "okx 页面选项卡有问题 打开居然播报语音了 给我禁止" → 本页不加载 announcer.js -->
+<script src="/web/js/page-common.js"></script>
+<!-- ★2026-10-25 共享组件（与总览页同一套）：echarts → net → chart → ui -->
+<script src="/web/js/vendor/echarts.min.js"></script>
+<script src="/web/js/net/api.js"></script>
+<script src="/web/js/chart/kit.js"></script>
+<script src="/web/js/ui/board.js"></script>
+<script src="/web/js/ui/rankpack.js"></script>
+<script src="/web/js/dock.js"></script>
+<script src="/web/js/chan-core.js"></script>
+<script src="/web/js/chan-draw.js"></script>
+<script src="/web/js/chan-pop.js"></script>
+<script src="/web/js/draw-tool.js"></script>
+<script src="/modules/okx/web/ind-engine.js"></script>
+<script src="/modules/okx/web/app.js"></script>
+</body>
+</html>

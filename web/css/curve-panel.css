@@ -1,0 +1,28 @@
+/* ============================================================
+ * curve-panel.css — 「信号盈利曲线」面板样式
+ *   1:1 复制 latest astock/web/assets/style.css 的 .btc-* 段(212-225行)
+ * ============================================================ */
+.btc-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 2px 0 8px; }
+.btc-bar a { font-size: 12px; padding: 3px 9px; border: 1px solid #263050; border-radius: 12px; }
+.btc-bar a.on { color: #f0a020; border-color: #f0a020; background: rgba(240, 160, 32, .08); }
+.btc-inp {
+  width: 62px; background: #12172a; border: 1px solid #263050; border-radius: 6px;
+  color: #d7dcea; font-size: 12px; padding: 3px 6px;
+}
+.btc-btn {
+  background: #1b2336; border: 1px solid #3a4664; border-radius: 6px;
+  color: #d7dcea; font-size: 12px; padding: 3px 10px; cursor: pointer;
+}
+.btc-btn:hover { border-color: #f0a020; color: #f0a020; }
+.btc-stat { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: 12px; color: #8b94ad; }
+.btc-stat b { display: block; font-size: 15px; color: #d7dcea; font-weight: 600; }
+.btc-stat .u { color: #f0334b; }
+.btc-stat .d { color: #0bbf7a; }
+.btc-wrap { position: relative; }
+.btc-cv { display: block; width: 100%; height: 260px; }
+.btc-tip {
+  position: absolute; pointer-events: none; background: #1b2336; border: 1px solid #3a4664;
+  border-radius: 6px; padding: 6px 9px; font-size: 11px; color: #d7dcea; display: none;
+  white-space: nowrap; z-index: 5; line-height: 1.6;
+}
+.btc-tip .k { color: #8b94ad; margin-right: 6px; }

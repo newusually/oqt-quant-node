@@ -1,0 +1,51 @@
+/*
+ * home.css — 页面层 / 主页
+ * 主页入口卡片网格：口算动画、看图应用、数学测试、语文测试、成长小课堂、语文学习、薄弱巩固。
+ */
+.hero {
+  text-align: center;
+  padding: 16px 10px 6px;
+}
+.hero h1 { font-size: 28px; color: #f4511e; text-shadow: 1px 1px 0 #ffe0b2; margin-bottom: 4px; }
+.hero p { font-size: 14px; color: #9b8a72; }
+
+.entry-grid {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  margin: 10px -5px;
+}
+.entry-card {
+  -webkit-box-flex: 1;
+  -webkit-flex: 1 1 200px;
+  flex: 1 1 200px;
+  margin: 6px 5px;
+  padding: 16px 12px;
+  text-align: center;
+  color: #fff;
+  border-radius: 18px;
+  -webkit-box-shadow: 0 5px 0 rgba(0,0,0,0.12);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.12);
+  -webkit-transition: -webkit-transform .1s;
+  transition: transform .1s;
+}
+.entry-card:active { -webkit-transform: translateY(3px); transform: translateY(3px); }
+.entry-card .emj { font-size: 40px; display: block; margin-bottom: 6px; }
+.entry-card .t { font-size: 18px; font-weight: bold; }
+.entry-card .d { font-size: 12px; opacity: .92; margin-top: 4px; }
+.entry-card.c1 { background: -webkit-linear-gradient(160deg, #ffb74d, #ff7043); background: linear-gradient(160deg, #ffb74d, #ff7043); }
+.entry-card.c2 { background: -webkit-linear-gradient(160deg, #4fc3f7, #0288d1); background: linear-gradient(160deg, #4fc3f7, #0288d1); }
+.entry-card.c3 { background: -webkit-linear-gradient(160deg, #81c784, #388e3c); background: linear-gradient(160deg, #81c784, #388e3c); }
+.entry-card.c4 { background: -webkit-linear-gradient(160deg, #ba68c8, #7b1fa2); background: linear-gradient(160deg, #ba68c8, #7b1fa2); }
+.entry-card.c5 { background: -webkit-linear-gradient(160deg, #ff8a80, #e53935); background: linear-gradient(160deg, #ff8a80, #e53935); }
+.entry-card.c6 { background: -webkit-linear-gradient(160deg, #fff59d, #f9a825); background: linear-gradient(160deg, #fff59d, #f9a825); color: #6d4c00; }
+.entry-card.c7 { background: -webkit-linear-gradient(160deg, #4db6ac, #00796b); background: linear-gradient(160deg, #4db6ac, #00796b); }
+.entry-card.c8 { background: -webkit-linear-gradient(160deg, #b39ddb, #5e35b1); background: linear-gradient(160deg, #b39ddb, #5e35b1); }
+.entry-card.c9 { background: -webkit-linear-gradient(160deg, #80cbc4, #00897b); background: linear-gradient(160deg, #80cbc4, #00897b); }
+.entry-card.c10 { background: -webkit-linear-gradient(160deg, #90caf9, #1565c0); background: linear-gradient(160deg, #90caf9, #1565c0); }
+.entry-card.c11 { background: -webkit-linear-gradient(160deg, #ffb74d, #e8890c); background: linear-gradient(160deg, #ffb74d, #e8890c); }
+
+.home-tools { text-align: center; margin-top: 8px; }
+.home-tools .btn { margin: 4px; }

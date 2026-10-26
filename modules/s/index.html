@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>主页 - 一年级趣味学习乐园</title>
+<link rel="stylesheet" href="assets/css/base/reset.css">
+<link rel="stylesheet" href="assets/css/base/layout.css">
+<link rel="stylesheet" href="assets/css/components/ui.css">
+<link rel="stylesheet" href="assets/css/components/shell.css">
+<link rel="stylesheet" href="assets/css/compat.css">
+<link rel="stylesheet" href="assets/css/pages/home.css">
+<script>
+(function () {
+  var h = document.documentElement;
+  var d = document.createElement('div').style;
+  if (!('flexWrap' in d) && !('WebkitFlexWrap' in d)) h.className += ' no-flex';
+  if (typeof Promise === 'undefined' || typeof Function.prototype.bind === 'undefined') h.className += ' old-kernel';
+})();
+</script>
+<link rel="stylesheet" href="/web/css/overview.css">
+</head>
+<body>
+<noscript><div class="wrap"><div class="card">😢 这个页面需要打开 JavaScript 才能学习哦，请在浏览器设置里允许运行 JavaScript。</div></div></noscript>
+<div id="app" data-view="home"></div>
+<script src="assets/js/vendor/vue.global.prod.js"></script>
+<script src="assets/js/core/compat.js"></script>
+<script src="assets/js/core/config.js"></script>
+<script src="assets/js/core/utils.js"></script>
+<script src="assets/js/core/store.js"></script>
+<script src="assets/js/core/shell.js"></script>
+<script src="assets/js/services/images.js"></script>
+<script src="assets/audio/manifest.js"></script>
+<script src="assets/js/services/speech.js"></script>
+<script src="assets/js/services/banks.js"></script>
+<script src="assets/js/views/home-view.js"></script>
+<script src="assets/js/services/readq.js"></script>
+<script src="assets/js/app.js"></script>
+
+<script src="/web/js/announcer.js"></script>
+<script src="/web/js/page-common.js"></script>
+<script>
+/* ★2026-10-24 用户要求「一年级学习乐园打开只播报学习乐园自己的内容,
+   不要混播首页面板的行情电台(重合了)」:
+   · 删掉 Announcer.start(行情电台) —— 首页/排行榜才要行情播报;
+   · 学习乐园只听自己的 Speech 欢迎语(assets/js/services/speech.js);
+   · 台湾女声(g-tw)作为学习乐园云端发音默认嗓(用户没手动选过时)。 */
+(function(){
+  if(window.PageCommon) window.PageCommon.showLoader("正在准备学习内容…");
+  try {
+    if (window.App && App.Speech && App.Speech.setCloudVoice &&
+        !(App.Store && App.Store.state && App.Store.state.voiceCloud)) {
+      App.Speech.setCloudVoice('g-tw');
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

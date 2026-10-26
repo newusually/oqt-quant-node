@@ -1,0 +1,13 @@
+{
+  "name": "OKX 永续合约",
+  "inst": "ETH-USDT-SWAP",
+  "defaultTf": "5m",
+  "tfs": ["1m", "5m", "15m", "1h", "4h", "1d"],
+  "dataPaths": {
+    "indicator": "data/okx/indicator/okx_ind_5m.sql",
+    "account": "data/okx/account/account_balance.sql",
+    "pnl": "data/okx/pnl/pnl_history.sql",
+    "trade": "data/okx/trade/trade_flow.sql",
+    "tradeSignal": "data/okx/trade/trade_signal.sql"
+  }
+}

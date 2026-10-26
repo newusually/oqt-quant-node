@@ -1,0 +1,33 @@
+# 凭证(绝不提交/绝不导出)
+modules/okx/config/api.json
+*.cred.json
+
+# 证书私钥(绝不提交)
+dadi.ink_apache/
+
+# 运行时数据(sqlite/kline 等，体积大且可再生)
+data/
+
+# 临时文件与备份
+tmp/
+tmp_*
+
+# 第三方/构建产物
+node_modules/
+tools/puppeteer/
+
+# 截图/诊断产物
+tools/shots/
+
+# 日志
+*.log
+logs/
+
+# 备份目录
+.backup_*/
+
+# devai 会话记忆
+.devai/memory.json
+
+# WorkBuddy 项目记忆/会话文件
+.workbuddy/

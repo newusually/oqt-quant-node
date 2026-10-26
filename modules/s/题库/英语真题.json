@@ -1,0 +1,339 @@
+{
+ "type": "english",
+ "name": "英语真题",
+ "questions": [
+  {
+   "type": "choice",
+   "q": "I see a ____ . (我看见一只猫)",
+   "opts": [
+    "cat",
+    "cap",
+    "cup"
+   ],
+   "ans": 0,
+   "speak": "cat",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "The ____ is red. (苹果是红色的)",
+   "opts": [
+    "apple",
+    "dog",
+    "book"
+   ],
+   "ans": 0,
+   "speak": "apple",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "A ____ can swim. (鱼会游泳)",
+   "opts": [
+    "fish",
+    "bird",
+    "star"
+   ],
+   "ans": 0,
+   "speak": "fish",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "The ____ is green. (树是绿色的)",
+   "opts": [
+    "tree",
+    "flower",
+    "pig"
+   ],
+   "ans": 0,
+   "speak": "tree",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "I like ____ . (我喜欢猫)",
+   "opts": [
+    "cats",
+    "sun",
+    "red"
+   ],
+   "ans": 0,
+   "speak": "cats",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "A ____ is in the sky. (星星在天上)",
+   "opts": [
+    "star",
+    "dog",
+    "book"
+   ],
+   "ans": 0,
+   "speak": "star",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "I am ____ . (我很开心)",
+   "opts": [
+    "happy",
+    "sad",
+    "big"
+   ],
+   "ans": 0,
+   "speak": "happy",
+   "kp": "单词"
+  },
+  {
+   "type": "choice",
+   "q": "The ____ is big. (大象很大)",
+   "opts": [
+    "elephant",
+    "bee",
+    "leaf"
+   ],
+   "ans": 0,
+   "speak": "elephant",
+   "kp": "单词"
+  },
+  {
+   "type": "listen",
+   "say": "cat",
+   "opts": [
+    "cat",
+    "cap",
+    "cup"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "sun",
+   "opts": [
+    "sun",
+    "son",
+    "soon"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "book",
+   "opts": [
+    "book",
+    "look",
+    "cook"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "red",
+   "opts": [
+    "red",
+    "bed",
+    "led"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "tree",
+   "opts": [
+    "tree",
+    "three",
+    "free"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "fish",
+   "opts": [
+    "fish",
+    "dish",
+    "wish"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "dog",
+   "opts": [
+    "dog",
+    "log",
+    "fog"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "listen",
+   "say": "bird",
+   "opts": [
+    "bird",
+    "bed",
+    "big"
+   ],
+   "ans": 0,
+   "kp": "听力"
+  },
+  {
+   "type": "spell",
+   "word": "cat",
+   "tiles": [
+    "a",
+    "t",
+    "c"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "dog",
+   "tiles": [
+    "g",
+    "d",
+    "o"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "sun",
+   "tiles": [
+    "n",
+    "s",
+    "u"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "pig",
+   "tiles": [
+    "p",
+    "i",
+    "g"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "red",
+   "tiles": [
+    "d",
+    "e",
+    "r"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "book",
+   "tiles": [
+    "k",
+    "k",
+    "o",
+    "b"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "tree",
+   "tiles": [
+    "e",
+    "t",
+    "e",
+    "r"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "spell",
+   "word": "fish",
+   "tiles": [
+    "s",
+    "i",
+    "f",
+    "h"
+   ],
+   "kp": "拼写"
+  },
+  {
+   "type": "cloze",
+   "text": "The ___ is red.",
+   "opts": [
+    "apple",
+    "cat",
+    "sun"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  },
+  {
+   "type": "cloze",
+   "text": "I see a ___ .",
+   "opts": [
+    "dog",
+    "book",
+    "tree"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  },
+  {
+   "type": "cloze",
+   "text": "A ___ can swim.",
+   "opts": [
+    "fish",
+    "bird",
+    "star"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  },
+  {
+   "type": "cloze",
+   "text": "The ___ is green.",
+   "opts": [
+    "tree",
+    "flower",
+    "pig"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  },
+  {
+   "type": "cloze",
+   "text": "I like ___ .",
+   "opts": [
+    "cats",
+    "sun",
+    "red"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  },
+  {
+   "type": "cloze",
+   "text": "A ___ is in the sky.",
+   "opts": [
+    "star",
+    "dog",
+    "book"
+   ],
+   "ans": 0,
+   "kp": "完形填空"
+  }
+ ]
+}

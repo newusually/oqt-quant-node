@@ -1,0 +1,17 @@
+{
+  "type": "chinese",
+  "name": "语文拓展与易错（形近字/多音字/笔画）",
+  "说明": "补充形近字、多音字、笔画笔顺等一年级常考易错点。type=choice（opts 选项、ans 下标）；type=match（反义词对）；kp=知识点；teach=讲解。",
+  "questions": [
+    { "type": "choice", "tag": "形近字", "kp": "形近字", "teach": "'进'（前进）和'近'（远近）读音相同意思不同，'远处'用'近'。", "say": "括号里填哪个字：远（ ）？", "html": "<div class='bigword' style='font-size:30px'>远（ ？ ）</div>", "opts": ["进", "近"], "ans": 1, "speakAns": "近" },
+    { "type": "choice", "tag": "形近字", "kp": "形近字", "teach": "'坐'（坐下）和'座'（座位），'一座山'用'座'。", "say": "括号里填哪个字：一（ ）山？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）山</div>", "opts": ["坐", "座"], "ans": 1, "speakAns": "座" },
+    { "type": "choice", "tag": "多音字", "kp": "多音字", "teach": "'一只鸟'的'一'读 yì（在第四声字前变调）。", "say": "一（ ？ ）只鸟，这里的一读什么？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）只鸟</div>", "opts": ["yī", "yì"], "ans": 1, "speakAns": "yì" },
+    { "type": "choice", "tag": "笔画", "kp": "汉字笔画", "teach": "'水'字共 4 画：竖钩、横撇、撇、捺。", "say": "“水”字共有几画？", "html": "<div class='bigword'>水</div>", "opts": ["4", "5", "3"], "ans": 0, "speakAns": "水字共4画" },
+    { "type": "choice", "tag": "笔画", "kp": "汉字笔画", "teach": "'火'字共 4 画：点、撇、撇、捺。", "say": "“火”字共有几画？", "html": "<div class='bigword'>火</div>", "opts": ["4", "5", "3"], "ans": 0, "speakAns": "火字共4画" },
+    { "type": "choice", "tag": "课文积累", "kp": "课文积累", "teach": "课文：谁知盘中餐，粒粒皆辛苦。", "say": "按课文填空：谁知盘（ ？ ）餐，粒粒皆辛苦。", "html": "<div style='font-size:24px;text-align:center'>谁知盘（ ？ ）餐，粒粒皆辛苦</div>", "opts": ["中", "上", "下"], "ans": 0, "speakAns": "中" },
+    { "type": "choice", "tag": "课文积累", "kp": "课文积累", "teach": "课文：白毛浮绿水，红掌拨清波。", "say": "按课文填空：白毛浮绿（ ？ ），红掌拨清波。", "html": "<div style='font-size:24px;text-align:center'>白毛浮绿（ ？ ），红掌拨清波</div>", "opts": ["水", "天", "云"], "ans": 0, "speakAns": "水" },
+    { "type": "choice", "tag": "词语搭配", "kp": "词语搭配", "teach": "弯弯的月儿、蓝蓝的天空，'月儿'配'弯弯'。", "say": "连一连的题：弯弯的（ ？ ）？", "html": "<div style='font-size:24px;text-align:center'>弯弯的（ ？ ）</div>", "opts": ["月儿", "大海", "太阳"], "ans": 0, "speakAns": "月儿" },
+    { "type": "match", "tag": "反义词连线", "kp": "反义词", "teach": "远—近、来—去、多—少、黑—白。", "say": "把意思相反的词连起来。", "pairs": [["远","近"],["来","去"],["多","少"],["黑","白"]], "left": ["远","来","多","黑"], "right": ["近","去","白","少"] },
+    { "type": "choice", "tag": "量词", "kp": "量词", "teach": "叶子用'片'：一片叶子。", "say": "括号里填什么量词：一（ ）叶子？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）叶子</div>", "opts": ["片", "只", "本"], "ans": 0, "speakAns": "片" }
+  ]
+}

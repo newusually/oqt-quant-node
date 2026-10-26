@@ -1,0 +1,111 @@
+/*
+ * pinyin-zone.css — 页面层 / 拼音专区
+ */
+.pz-intro { font-size: 16px; color: #5d4037; margin-bottom: 10px; line-height: 1.7; }
+.pz-intro b { color: #e65100; }
+
+/* 写法：四线三格 */
+.sxs-hero {
+  display: -webkit-box; display: -webkit-flex; display: flex;
+  -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+  -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-bottom: 14px;
+}
+.hero-svg {
+  width: 340px; max-width: 100%; height: auto; border-radius: 18px;
+  -webkit-box-shadow: 0 6px 18px rgba(176, 137, 72, .25); box-shadow: 0 6px 18px rgba(176, 137, 72, .25);
+}
+.hero-letter { -webkit-transform-box: fill-box; transform-box: fill-box; -webkit-transform-origin: center; transform-origin: center; }
+.hero-letter.writing { -webkit-animation: sxsWrite .55s cubic-bezier(.2, 1.4, .4, 1) both; animation: sxsWrite .55s cubic-bezier(.2, 1.4, .4, 1) both; }
+@-webkit-keyframes sxsWrite { from { opacity: 0; -webkit-transform: scale(.4) rotate(-8deg); } to { opacity: 1; -webkit-transform: scale(1) rotate(0); } }
+@keyframes sxsWrite { from { opacity: 0; transform: scale(.4) rotate(-8deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+.hero-side { -webkit-box-flex: 1; -webkit-flex: 1 1 180px; flex: 1 1 180px; min-width: 160px; padding: 8px 12px; text-align: center; }
+.hero-name { font-size: 44px; font-weight: bold; color: #e65100; font-family: KaiTi, STKaiti, serif; line-height: 1.1; }
+.hero-poschip {
+  display: inline-block; margin: 6px 0 10px; padding: 3px 12px; border-radius: 999px;
+  font-size: 13px; color: #5d4037; background: #fff3e0; border: 1.5px solid #ffd9a8;
+}
+.hero-poschip.p-upmid { background: #fff8e1; border-color: #ffe0a3; }
+.hero-poschip.p-middown { background: #e8f4fd; border-color: #b3dcf5; }
+.hero-poschip.p-all { background: #f3e5f5; border-color: #d9aee8; }
+.hero-side .btn { display: block; width: 100%; margin: 5px 0; }
+
+.sxs-wrap {
+  display: -webkit-box; display: -webkit-flex; display: flex;
+  -webkit-flex-wrap: wrap; flex-wrap: wrap; -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center;
+}
+.sxscard {
+  width: 84px; margin: 6px; padding: 9px 4px 8px; text-align: center;
+  background: -webkit-linear-gradient(#ffffff, #fffaf2); background: linear-gradient(#ffffff, #fffaf2);
+  border: 2px solid #ffd9a8; border-radius: 16px; cursor: pointer;
+  -webkit-box-shadow: 0 2px 6px rgba(224, 168, 61, .12); box-shadow: 0 2px 6px rgba(224, 168, 61, .12);
+  -webkit-transition: -webkit-transform .12s, -webkit-box-shadow .12s; transition: transform .12s, box-shadow .12s;
+}
+.sxscard:hover { -webkit-transform: translateY(-4px); transform: translateY(-4px); -webkit-box-shadow: 0 8px 16px rgba(224, 168, 61, .22); box-shadow: 0 8px 16px rgba(224, 168, 61, .22); }
+.sxscard.on { border-color: #ff8f00; -webkit-box-shadow: 0 0 0 3px rgba(255, 143, 0, .25); box-shadow: 0 0 0 3px rgba(255, 143, 0, .25); }
+.sxscard:nth-child(6n+1) { border-color: #ffcc80; }
+.sxscard:nth-child(6n+2) { border-color: #c5e1a5; }
+.sxscard:nth-child(6n+3) { border-color: #90caf9; }
+.sxscard:nth-child(6n+4) { border-color: #ce93d8; }
+.sxscard:nth-child(6n+5) { border-color: #ef9a9a; }
+.sxs {
+  position: relative; height: 66px; margin: 0 auto 5px; width: 58px;
+  background:
+    -webkit-linear-gradient(#c9b48f, #c9b48f) 0 0 / 100% 1px no-repeat,
+    -webkit-linear-gradient(#c9b48f, #c9b48f) 0 33.33% / 100% 1px no-repeat,
+    -webkit-linear-gradient(#c9b48f, #c9b48f) 0 66.66% / 100% 1px no-repeat,
+    -webkit-linear-gradient(#c9b48f, #c9b48f) 0 100% / 100% 1px no-repeat,
+    -webkit-linear-gradient(#f3ede1, #f3ede1) 0 33.33% / 100% 33.33% no-repeat,
+    -webkit-linear-gradient(#f3ede1, #f3ede1) 0 66.66% / 100% 33.33% no-repeat;
+  background:
+    linear-gradient(#c9b48f, #c9b48f) 0 0 / 100% 1px no-repeat,
+    linear-gradient(#c9b48f, #c9b48f) 0 33.33% / 100% 1px no-repeat,
+    linear-gradient(#c9b48f, #c9b48f) 0 66.66% / 100% 1px no-repeat,
+    linear-gradient(#c9b48f, #c9b48f) 0 100% / 100% 1px no-repeat,
+    linear-gradient(#f3ede1, #f3ede1) 0 33.33% / 100% 33.33% no-repeat,
+    linear-gradient(#f3ede1, #f3ede1) 0 66.66% / 100% 33.33% no-repeat;
+  border-left: 1px solid #c9b48f; border-right: 1px solid #c9b48f;
+  border-radius: 4px;
+}
+.sxs-letter {
+  position: absolute; left: 50%; font-size: 34px; color: #e65100; font-weight: bold; line-height: 1;
+  font-family: KaiTi, STKaiti, serif;
+  -webkit-transform: translate(-50%, -50%); transform: translate(-50%, -50%);
+}
+/* 占格定位：中格=中间一条，上中格=中上两条，中下格=中下两条，上中下格=整格 */
+.sxs.p-mid .sxs-letter { top: 50%; }
+.sxs.p-upmid .sxs-letter { top: 33.3%; }
+.sxs.p-middown .sxs-letter { top: 66.6%; }
+.sxs.p-all .sxs-letter { top: 50%; font-size: 40px; }
+.sxs-pos { font-size: 11px; color: #9b8a72; margin-top: 2px; }
+.sxs-name { font-size: 14px; color: #5d4037; font-weight: bold; font-family: KaiTi, STKaiti, serif; }
+
+/* 注音（NLP 生成） */
+ruby { ruby-position: over; -webkit-ruby-position: before; }
+rt { font-size: .52em; color: #e65100; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+/* 组成 */
+.compose {
+  display: -webkit-box; display: -webkit-flex; display: flex;
+  -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+  -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center;
+  -webkit-flex-wrap: wrap; flex-wrap: wrap; margin: 14px 0;
+}
+.cpart { background: #fff3e0; border: 2px solid #ffd9a8; border-radius: 16px; padding: 12px 18px; text-align: center; min-width: 84px; }
+.clab { display: block; font-size: 12px; color: #9b8a72; margin-bottom: 4px; }
+.cval { font-size: 34px; color: #e65100; font-weight: bold; }
+.cplus { font-size: 28px; color: #b08948; margin: 0 10px; }
+.cres .cval { color: #2e7d32; }
+
+/* 形象记忆 */
+.mem-wrap { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.memcard {
+  -webkit-box-flex: 1; -webkit-flex: 1 1 200px; flex: 1 1 200px; margin: 6px;
+  background: #fff8ef; border: 2px solid #ffd9a8; border-radius: 14px; padding: 10px 12px; cursor: pointer;
+}
+.mem-k { font-size: 30px; color: #e65100; font-weight: bold; }
+.mem-tip { font-size: 14px; color: #5d4037; margin-top: 4px; line-height: 1.6; }
+
+/* 拼读/声调/填字 展示 */
+.blend-show, .tone-show, .fill-show {
+  font-size: 40px; color: #e65100; font-weight: bold; text-align: center; margin: 14px 0;
+}
