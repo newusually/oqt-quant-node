@@ -330,7 +330,11 @@ async function handle(ep, q) {
           sector: q.sector || '',
           bars: int(q.bars, 4000),
           beforeTs: int(q.beforeTs, 0),
-          lead: q.lead || 'BTC'
+          lead: q.lead || 'BTC',
+          /* ★2026-10-28 服务端分页(可选): 传了才分页, 不传=全量(向后兼容)。
+           *   3m bars=18000 全量响应实测 4.32 MB, 表格一屏只显示 20 行 → 分页省 99.9% 传输 */
+          page: int(q.page, 0),
+          pageSize: int(q.pageSize, 0)
         });
         return d;
       } catch (e) {

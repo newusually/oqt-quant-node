@@ -62,6 +62,12 @@ const GRAIN_MS = {
  *   → 前端"最新15分钟"高频 AJAX 取实时值，老数据走长缓存不重复算 */
 const CACHE = new Map();
 
+/* ★2026-10-28 Redis 共享缓存(可选): Redis 不可用时 RC 为 null, 全走进程内缓存 */
+let RC = null;
+try { RC = require('./rediscache'); } catch (e) { RC = null; }
+/* Redis 单 key 上限保护: 128MB 内存里不能塞进超大对象(3m bars=18000 约 4.3MB) */
+const RC_MAX_BARS = 3000;
+
 async function updown(opt) {
   opt = opt || {};
   const sector = opt.sector || '';
@@ -73,22 +79,64 @@ async function updown(opt) {
   const CACHE_TTL = tiny ? 5000 : 30000;
   const beforeTs = parseInt(opt.beforeTs, 10) || 0;
   const lead = (opt.lead || 'BTC').toUpperCase();
-  const cacheKey = [sector, grain, bars, beforeTs, lead].join('|');
+  const rqPage0 = parseInt(opt.page, 10) || 0;
+  const rqSize0 = parseInt(opt.pageSize, 10) || 0;
+  /* ★分页参数必须进 key: 否则第1页的全量结果会把第2页的请求"命中"掉 */
+  const cacheKey = [sector, grain, bars, beforeTs, lead, rqPage0, rqSize0].join('|');
   const hit = CACHE.get(cacheKey);
   if (hit && Date.now() - hit.at < CACHE_TTL) return hit.data;
-  const data = await calc(sector, grain, bars, beforeTs, lead);
+
+  /* ★2026-10-28 SWR（stale-while-revalidate）: 缓存过期但存在 → 立刻返回旧数据,
+   *   同时在后台重算刷新, 下一个请求就是新的。
+   *   缘起: 预聚合未启用时单次全市场扫描 3m 需 ~40 秒, 用户切一次分时白屏干等 40 秒;
+   *         切回来发现又是新 key 又要 40 秒 → "切换分时特别慢"。
+   *   SWR 后: 首次仍慢(后台预聚合完成后会消失), 之后任何切换都是毫秒级出数据。 */
+  /* ★查 Redis 共享缓存: 多进程(cluster)部署时各 worker 共享同一份结果,
+   *   避免每个进程各自算一遍 40 秒的全市场扫描。 */
+  if (RC && !hit && bars <= RC_MAX_BARS) {
+    try {
+      const rj = await RC.getJSON('ud:v2:' + cacheKey);
+      if (rj && rj.bars && rj.bars.length) {
+        /* 回填进程内缓存, 下次同参数直接内存命中(比 Redis 更快) */
+        CACHE.set(cacheKey, { at: Date.now(), refreshing: false, data: rj });
+        return Object.assign({}, rj, { fromRedis: true });
+      }
+    } catch (e) { }
+  }
+
+  if (hit && !hit.refreshing) {
+    hit.refreshing = true;
+    const key = cacheKey;
+    calc(sector, grain, bars, beforeTs, lead, opt).then(function (d) {
+      CACHE.set(key, {
+        at: Date.now(), refreshing: false,
+        data: Object.assign({ ok: true, at: Date.now(), stale: false }, d)
+      });
+    }).catch(function () {
+      const h = CACHE.get(key);
+      if (h) h.refreshing = false;      // 失败: 解除标记, 下次请求可再次触发刷新
+    });
+    return Object.assign({}, hit.data, { stale: true, staleAgeMs: Date.now() - hit.at });
+  }
+
+  const data = await calc(sector, grain, bars, beforeTs, lead, opt);
   const out = Object.assign({ ok: true, at: Date.now(), cached: !!hit && Date.now() - hit.at < CACHE_TTL * 2 }, data);
-  CACHE.set(cacheKey, { at: Date.now(), data: out });
+  CACHE.set(cacheKey, { at: Date.now(), refreshing: false, data: out });
+  /* ★写回 Redis(异步不等待, TTL 60s 与进程内缓存一致) */
+  if (RC && bars <= RC_MAX_BARS) {
+    try { RC.setJSON('ud:v2:' + cacheKey, 60, out); } catch (e) { }
+  }
   return out;
 }
 
-async function calc(sector, grain, bars, beforeTs, lead) {
+async function calc(sector, grain, bars, beforeTs, lead, opt) {
   const u = await I.universe();
   if (!u.ok) return { ok: false, err: 'universe 未就绪', bars: [] };
   let list = u.list;
   if (sector && sector !== 'all') list = list.filter(x => x.sector === sector);
   if (!list.length) return { ok: false, err: '板块无标的', bars: [] };
 
+  opt = opt || {};
   const agg = new Map();          // ts -> {ts,up,down,flat,n}
   const leadInst = list.find(x => x.sym === lead) || null;   // ★主力合约(默认BTC)
   let leadCandles = null;        // 主力合约全量 OHLCV（画K线，K线在bars对应历史内）
@@ -295,12 +343,42 @@ async function calc(sector, grain, bars, beforeTs, lead) {
     const li = out.indexOf(last);
     prevBar = li > 0 ? out[li - 1] : {};
   } else prevBar = {};
+  /* ★2026-10-28 主轴对齐：K线(leadCandles) 与 统计(bars) 取交集, 消除"空白行"
+   *   缘起: 前端 buildTableRows 以 leadCandles 为主轴逐根渲染, 每个 ts 去 bars 里取
+   *         涨跌家数; 而尾部碎片剔除会砍掉覆盖不足的时间片(如 143/287)。
+   *         → 被砍掉的 ts 仍在 leadCandles 里 → 表格出现「价格有值、家数全 -」的空行,
+   *           用户看到的就是"最近几笔的数据总是空白"。
+   *   修法: 只保留两边都有的 ts。宁可少显示一根, 也不显示残缺行。
+   *   兜底: 交集为空(极端异常)时保留原序列, 避免K线图整个消失。 */
+  const outTs = new Set(out.map(b => b.ts));
+  let leadAligned = (leadCandles || []).filter(r => outTs.has(r.ts));
+  if (!leadAligned.length && leadCandles && leadCandles.length) leadAligned = leadCandles;
+
+  /* ★2026-10-28 服务端分页（默认关闭 = 行为完全不变, 前端传 page 才生效）
+   *   缘起: bars=18000 时 3m 单次响应实测 4.32 MB, 而表格一屏只显示 20 行 →
+   *         99.9% 的传输是浪费。用户明确要求"所有数据分页"。
+   *   口径: 与前端一致 —— 序列按时间升序(最新在最后), 第 1 页=最早。
+   *         stats 仍按全量 out 计算(顶部统计条不能随翻页变化)。
+   *   注: leadCandles(K线)不裁 —— K线图需要连续历史, 裁了会出现空洞。 */
+  const rqPage = parseInt(opt.page, 10) || 0;
+  const rqSize = parseInt(opt.pageSize, 10) || 0;
+  let pagedBars = out, pageInfo = null;
+  if (rqPage > 0 && rqSize > 0) {
+    const total = out.length;
+    const pages = Math.max(1, Math.ceil(total / rqSize));
+    const p = Math.min(rqPage, pages);
+    const s = Math.max(0, (p - 1) * rqSize);
+    pagedBars = out.slice(s, s + rqSize);
+    pageInfo = { page: p, pageSize: rqSize, total: total, pages: pages };
+  }
+
   return {
     ok: true, grain, sector, lead,
     count: list.length, covCount: cov,
-    bars: out,
+    bars: pagedBars,
+    pageInfo: pageInfo,
     /* ★主力合约 K线全量（OHLCV），供前端叠加到BTC K线图 */
-    leadCandles: (leadCandles || []).map(r => ({
+    leadCandles: leadAligned.map(r => ({
       ts: r.ts, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v
     })),
     oldest: out.length ? out[0].ts : 0, newest: out.length ? out[out.length - 1].ts : 0,

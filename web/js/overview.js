@@ -490,7 +490,10 @@
      *   → K线(分时切换) + 详细表格(独立分时选项卡) + 该分时买卖信号回测
      *   ★2026-10-26 用户要求: 分时顺序 3m/5m/15m/1h/2h/4h；表格与回测均带分页 */
     if (window.UpDown && $('updown-panel')) {
-      window.UpDown.mount('updown-panel', { grain: '15m', sector: '', lead: 'BTC', bars: 18000, interval: 30000 });
+      /* ★2026-10-28 bars 18000 → 2000: 单次响应实测 4.32MB(3m) 而表格一屏只显示 20 行,
+       *   99% 的传输是浪费 → 收窄后 0.72MB(降 83%), 切分时从"几十秒白屏"变秒开。
+       *   需要看更早历史 → 用表格分页条上的「« 更早」按钮按 beforeTs 往回翻。 */
+      window.UpDown.mount('updown-panel', { grain: '15m', sector: '', lead: 'BTC', bars: 2000, interval: 30000 });
 
 
 

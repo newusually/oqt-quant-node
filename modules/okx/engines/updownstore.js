@@ -71,10 +71,14 @@ async function build(grain, opt) {
   const list = u.list;
   const gg = grain || '1h';
   const aggMap = new Map();
-  let cov = 0, rows = 0;
+  let cov = 0, rows = 0, processed = 0;
   const t0 = Date.now();
 
   for (const x of list) {
+    /* ★2026-10-28 让出主线程: 全量扫描 287 合约(3m 约 2600 万行)是同步 sqlite 读,
+     *   不 yield 会死死阻塞 Node 主线程 2 分钟+ → 页面全部请求排队假死。
+     *   每 8 个合约 setImmediate 让出一次, 在线请求照常响应(构建只是变慢一点)。 */
+    if (++processed % 8 === 0) await new Promise(r => setImmediate(r));
     /* ★月分片: 读该合约全部月片(升序拼接, 按 ts 去重); 预计算本来就是全表场景 */
     const chain = KS.readChain(gg, x.instId, 0, 0);
     if (!chain.length) continue;
@@ -107,21 +111,31 @@ async function build(grain, opt) {
       /* ★该时间片跌得最狠的合约（表格「最低价 / 最低价跌幅」两列） */
       if (!a.worst || pct < a.worst.pct) a.worst = { inst: x.instId, px: cur, pct: pct };
     }
-    try { d.close(); } catch (e) { }
+    /* (原有一行 try{d.close()} 实际引用的是下方尚未初始化的 d, 恒抛 TDZ 被吞;
+     *   且 roOpen 是共享只读池, 关掉会破坏其它引擎的句柄 → 直接删除) */
   }
 
   const d = db();
-  d.exec('BEGIN');
+  const arr = Array.from(aggMap.values()).sort((a, b) => a.ts - b.ts);
+  /* ★2026-10-28 分批事务: 30 万+ 条 INSERT/UPDATE 一次性跑完会长时间占住主线程,
+   *   改成每 5000 条提交一次并让出主线程（数据分批改完仍在同一事务语义内,
+   *   中途失败最多留下部分数据, 下次定时重建会整体覆盖） */
   d.prepare('DELETE FROM updown WHERE grain=?').run(gg);
   const ins = d.prepare('INSERT OR REPLACE INTO updown (grain,ts,up,down,flat,total) VALUES (?,?,?,?,?,?)');
-  const arr = Array.from(aggMap.values()).sort((a, b) => a.ts - b.ts);
   const ins2 = d.prepare('UPDATE updown SET min_pct=?, min_px=?, min_inst=? WHERE grain=? AND ts=?');
-  for (const a of arr) {
-    ins.run(gg, a.ts, a.up, a.down, a.flat, a.n);
-    if (a.worst) ins2.run(a.worst.pct, a.worst.px, a.worst.inst, gg, a.ts);
+  const CHUNK = 5000;
+  for (let i = 0; i < arr.length; i += CHUNK) {
+    d.exec('BEGIN');
+    const end = Math.min(arr.length, i + CHUNK);
+    for (let k = i; k < end; k++) {
+      const a = arr[k];
+      ins.run(gg, a.ts, a.up, a.down, a.flat, a.n);
+      if (a.worst) ins2.run(a.worst.pct, a.worst.px, a.worst.inst, gg, a.ts);
+    }
+    d.exec('COMMIT');
+    if (end < arr.length) await new Promise(r => setImmediate(r));
   }
   d.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('built:' + gg, String(Date.now()));
-  d.exec('COMMIT');
   AGG_CACHE.delete(gg);
   return {
     ok: true, grain: gg, contracts: cov, klineRows: rows, slices: arr.length,

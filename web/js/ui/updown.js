@@ -50,7 +50,8 @@
       REG[UID] = {
         grain: '15m',        /* K线分时 */
         tgrain: '15m',       /* 详细表格+回测分时（独立选项卡） */
-        sector: '', lead: 'BTC', bars: 3000,
+        sector: '', lead: 'BTC', bars: 2000,
+        loadingOlder: false,        /* ★2026-10-28 「« 更早」加载中标记(防重复点击) */
         kdata: null,         /* K线分时数据 */
         tdata: null,         /* 表格分时数据 */
         el: null, refs: {},
@@ -262,7 +263,7 @@
     var g = s.tgrain || s.grain;
     if (s.refs.strgrain) s.refs.strgrain.textContent = tfLabel(g);
     if (s.strGrain === g && s.strData && Date.now() - s.strAt < 60000) { renderStreak(); return; }
-    Net.get('/api/boards/streak?grain=' + g + '&thr=100&minLen=2&bars=18000&maxRows=400', { ttl: 60000, timeout: 120000 })
+    Net.get('/api/boards/streak?grain=' + g + '&thr=100&minLen=2&bars=2000&maxRows=400', { ttl: 60000, timeout: 120000 })
       .then(function (j) {
         if (!j || !j.ok) {
           if (s.refs.str) s.refs.str.innerHTML = '<div class="sg-note">连续统计未就绪：' + esc((j && j.err) || '') + '</div>';
@@ -522,15 +523,60 @@
       '</tr></thead><tbody>' + html + '</tbody></table>';
     var pg = s.el.querySelector('#ud-tpg-' + UID);
     if (pg) {
-      pg.innerHTML = pageBtns(pages, s.tpage, 'tp');
+      /* ★2026-10-28 「« 更早」按钮: 窗口收窄到 2000 根后历史深度变浅,
+       *   用它按 beforeTs 往回拉更早一批, 拼到现有序列前面 → 既能秒开又能翻到很久以前 */
+      var olderBtn = s.loadingOlder
+        ? '<span class="ud-pginfo">⏳ 加载更早…</span>'
+        : '<button class="ud-pgbtn" data-older="1" title="往回加载更早的 ' + (s.bars || 2000) + ' 根">« 更早</button>';
+      pg.innerHTML = olderBtn + pageBtns(pages, s.tpage, 'tp');
       pg.onclick = function (e) {
         var t = e.target;
+        if (t && t.dataset && t.dataset.older) { loadOlder(); return; }
         if (t && t.dataset && t.dataset.tp) {
           var p = parseInt(t.dataset.tp, 10);
           if (!isNaN(p)) { s.tpage = p; renderT(); }
         }
       };
     }
+  }
+
+  /* ★2026-10-28 往回翻更早历史（beforeTs）
+   *   后端 updown 已支持 beforeTs(翻到该时间戳为止), 这里把更早一批拼到序列前面。
+   *   用「严格早于当前最早 ts」过滤, 避免边界根重复拼接。 */
+  function loadOlder() {
+    var s = st();
+    if (s.loadingOlder) return;
+    var j = s.tdata;
+    if (!j) return;
+    var bars = j.bars || [], lc = j.leadCandles || [];
+    var oldest = 0, i;
+    for (i = 0; i < lc.length; i++) if (!oldest || lc[i].ts < oldest) oldest = lc[i].ts;
+    for (i = 0; i < bars.length; i++) if (!oldest || bars[i].ts < oldest) oldest = bars[i].ts;
+    if (!oldest) return;
+    s.loadingOlder = true;
+    renderT();
+    var url = '/api/boards/updown?grain=' + encodeURIComponent(s.tgrain) +
+      '&sector=' + encodeURIComponent(s.sector) +
+      '&lead=' + encodeURIComponent(s.lead) +
+      '&bars=' + (s.bars || 2000) + '&beforeTs=' + oldest + '&t=' + Date.now();
+    Net.get(url, { ttl: 60000, timeout: 60000 }).then(function (r) {
+      s.loadingOlder = false;
+      if (!r || !r.ok) { renderT(); return; }
+      var mb = (r.bars || []).filter(function (x) { return x.ts < oldest; });
+      var ml = (r.leadCandles || []).filter(function (x) { return x.ts < oldest; });
+      if (!mb.length && !ml.length) { renderT(); return; }
+      s.tdata = {
+        ok: true, grain: r.grain || j.grain, sector: r.sector || j.sector, lead: r.lead || j.lead,
+        count: r.count || j.count, covCount: r.covCount || j.covCount,
+        bars: mb.concat(j.bars || []),
+        leadCandles: ml.concat(j.leadCandles || []),
+        oldest: mb.length ? mb[0].ts : j.oldest,
+        newest: j.newest, spanDays: j.spanDays, leadName: j.leadName,
+        stats: j.stats
+      };
+      s.tpage = 1;
+      renderT(); renderSig();
+    })['catch'](function () { s.loadingOlder = false; renderT(); });
   }
 
   /* ---------------- ③ BTC 信号回测面板（跟随表格分时 · 分页可翻历史） ----------------
@@ -635,7 +681,7 @@
   }
 
   function mount(elId, opt) {
-    opt = Object.assign({ grain: '15m', sector: '', lead: 'BTC', bars: 3000, interval: 30000 }, opt || {});
+    opt = Object.assign({ grain: '15m', sector: '', lead: 'BTC', bars: 2000, interval: 30000 }, opt || {});
     var el = typeof elId === 'string' ? document.getElementById(elId) : elId;
     if (!el) return;
     var s = st();

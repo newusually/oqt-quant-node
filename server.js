@@ -343,6 +343,47 @@ server.listen(PORT, () => {
       }
     })();
   }, 30000);
+
+  /* ★2026-10-28 启用「涨跌家数预聚合库」(updownstore) —— 总览详细表格提速 40 倍
+   *   缘起: updownstore.build/agg 早在 10-26 就写好了, 但全项目**零调用点**,
+   *         预计算表永远是空的 → updown.js 每次请求都退化成实时扫描
+   *         287 合约 × 18001 根 ≈ 517 万行, 实测 3m 36 秒 / 5m 43 秒。
+   *         用户体感: "详细表格特别慢、切换分时特别慢"。
+   *   修法: 启动 5 分钟后(避开启动高峰)串行构建; 之后每 30 分钟重建一次。
+   *   顺序: 15m/1h/2h/4h 数据量小先建(用户最常用), 5m/3m 放最后(行数最多)。
+   *   build 内部已加 setImmediate 让出主线程, 构建期间在线请求不受影响。 */
+  {
+    const AGG_GRAINS = ['15m', '1h', '2h', '4h', '5m', '3m'];
+    let aggBuilding = false;
+    async function buildAggAll(tag) {
+      if (aggBuilding) { console.log('[agg] 上一轮仍在构建, 跳过(' + tag + ')'); return; }
+      aggBuilding = true;
+      const t0 = Date.now();
+      try {
+        const UDST = require('./modules/okx/engines/updownstore');
+        for (const g of AGG_GRAINS) {
+          try {
+            const r = await UDST.build(g);
+            if (r && r.ok) {
+              console.log('[agg] ' + g + ' 构建完成: 片数=' + r.slices + ' 合约=' + r.contracts +
+                ' 耗时=' + r.ms + 'ms (' + tag + ')');
+            } else {
+              console.log('[agg] ' + g + ' 构建失败: ' + JSON.stringify(r));
+            }
+          } catch (e) {
+            console.log('[agg] ' + g + ' 构建异常: ' + ((e && e.message) || e));
+          }
+          await new Promise(r => setTimeout(r, 5000));   // 周期间隔, 别把 IO 打满
+        }
+        console.log('[agg] 全周期构建结束, 总耗时 ' + Math.round((Date.now() - t0) / 1000) + 's (' + tag + ')');
+      } finally {
+        aggBuilding = false;
+      }
+    }
+    setTimeout(function () { buildAggAll('boot').catch(function () { }); }, 300000);
+    setInterval(function () { buildAggAll('timer').catch(function () { }); }, 1800000);
+  }
+
   // ★K线保鲜员: 每 30s 给最近浏览过的合约拉最新K线落库
   //   (主图形成中K线由前端 SSE 实时拼; 这里保证已收线的K线持续入库, 60s 对账重载有真实数据可拿)
   setInterval(() => {
