@@ -26,7 +26,7 @@ async function streak(opt) {
   const minLen = Math.max(1, parseInt(opt.minLen, 10) || 2);
   const maxRows = parseInt(opt.maxRows, 10) || 400;
 
-  const d = await UD.updown({ grain: grain, bars: parseInt(opt.bars, 10) || 18000, lead: 'BTC', sector: '' });
+  const d = await UD.updown({ grain: grain, bars: parseInt(opt.bars, 10) || 2000, lead: 'BTC', sector: '' });
   if (!d || !d.ok || !d.bars) return { ok: false, err: (d && d.err) || '涨跌家数未就绪', rows: [] };
   const list = d.bars;
   if (list.length < 5) return { ok: false, err: '数据太少', rows: [] };

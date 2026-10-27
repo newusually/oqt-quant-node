@@ -44,15 +44,18 @@ function monthsOf(bar, instId) {
 function hasLegacy(bar, instId) { return fs.existsSync(legacyFile(bar, instId)); }
 
 /* ---------------- 只读 LRU 句柄池（自 kline.js 移入, 全引擎共用） ----------------
- * 月片比单文件更多更小, 池上限 120→160; 每句柄 ~2MB 堆, 160 ≈ 320MB 上限可控。 */
+ * ★2026-10-28 内存治理: SQLite 默认给每个连接 2000 页(4KB/页 ≈ 8MB)页缓存,
+ *   池里上百个连接 = 上 GB 常驻 → 1.9G 的机器被吃穿并触发 swap(实测 swap 占用 674MB、
+ *   swap-in 18MB/s、磁盘读 25MB/s), 表现为「连静态 HTML 都要等 30~60 秒」。
+ *   现在显式限制每连接 2MB(512 页)、池上限 160→96 → 连接池上限约 200MB。 */
 const RO_POOL = new Map();
-const RO_MAX = 160;
+const RO_MAX = 96;
 function roOpen(file) {
   let db = RO_POOL.get(file);
   if (db) { RO_POOL.delete(file); RO_POOL.set(file, db); return db; }
   try {
     db = new DatabaseSync(file, { readOnly: true });
-    db.exec('PRAGMA busy_timeout=30000;');
+    db.exec('PRAGMA busy_timeout=5000; PRAGMA cache_size=-512;');
   } catch (e) { return null; }
   RO_POOL.set(file, db);
   while (RO_POOL.size > RO_MAX) {

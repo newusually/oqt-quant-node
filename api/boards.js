@@ -322,13 +322,15 @@ async function handle(ep, q) {
     /* ★★★首页播报下方：全市场 15m 涨跌家数统计（2026-10-26）
      *   "搜索的 OKX 合约 200 多，每15分钟算上涨/下跌家数、比例、差额，
      *    并与主力合约(BTC)15分钟涨幅比较 → 画双曲线 + 详细表格"
-     *   参数: grain(15m/1h/5m) sector(板块) bars(根数, 默认4000≈42天) beforeTs(左移看更早) lead(主力, 默认BTC) */
+     *   参数: grain(15m/1h/5m) sector(板块) bars(根数, 默认2000≈21天@15m) beforeTs(左移看更早) lead(主力, 默认BTC) */
     case 'updown': {
       try {
         const d = await UD.updown({
           grain: q.grain || '15m',
           sector: q.sector || '',
-          bars: int(q.bars, 4000),
+          /* ★2026-10-28 默认窗口 4000 → 2000: K线与表格同轴, 2000 根足够图表+表格,
+           *   更深历史用 beforeTs 回溯 / page 翻页, 不必每次传全量 */
+          bars: int(q.bars, 2000),
           beforeTs: int(q.beforeTs, 0),
           lead: q.lead || 'BTC',
           /* ★2026-10-28 服务端分页(可选): 传了才分页, 不传=全量(向后兼容)。
@@ -349,7 +351,9 @@ async function handle(ep, q) {
           grain: q.grain || '15m',
           thr: int(q.thr, 100),
           minLen: int(q.minLen, 2),
-          bars: int(q.bars, 18000),
+          /* ★2026-10-28 默认 18000 → 2000(与 updown 窗口一致): 明细表最多取最近
+           *   2000 根做区段统计已足够, maxRows 再截断到前端要的行数 */
+          bars: int(q.bars, 2000),
           maxRows: int(q.maxRows, 400)
         });
       } catch (e) { return { ok: false, err: String((e && e.message) || e), rows: [] }; }

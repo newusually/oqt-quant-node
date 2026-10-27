@@ -52,6 +52,9 @@
         tgrain: '15m',       /* 详细表格+回测分时（独立选项卡） */
         sector: '', lead: 'BTC', bars: 2000,
         loadingOlder: false,        /* ★2026-10-28 「« 更早」加载中标记(防重复点击) */
+        /* ★2026-10-28 服务端分页状态: tBefore=回溯锚点(0=最新窗口) tPages=当前窗口总页数
+         *   tWinBack=已往回开了几个窗口(用于提示「第 N 段历史」) tTotal=当前窗口总根数 */
+        tBefore: 0, tPages: 0, tWinBack: 0, tTotal: 0,
         kdata: null,         /* K线分时数据 */
         tdata: null,         /* 表格分时数据 */
         el: null, refs: {},
@@ -162,8 +165,8 @@
       kttl: el.querySelector('#ud-kttl-' + UID)
     };
     s.refs.sec.value = s.sector;
-    s.refs.sec.addEventListener('change', function () { s.sector = s.refs.sec.value; loadAll(); });
-    s.refs.lead.addEventListener('change', function () { s.lead = s.refs.lead.value; s.sigs = null; loadAll(); });
+    s.refs.sec.addEventListener('change', function () { s.sector = s.refs.sec.value; s.tpage = 1; s.tBefore = 0; s.tPages = 0; s.tWinBack = 0; loadAll(); });
+    s.refs.lead.addEventListener('change', function () { s.lead = s.refs.lead.value; s.sigs = null; s.tpage = 1; s.tBefore = 0; s.tPages = 0; s.tWinBack = 0; loadAll(); });
     s.refs.refresh.addEventListener('click', function () { loadAll(); });
     /* ★连续涨跌统计分页 */
     if (s.refs.spg) s.refs.spg.addEventListener('click', function (e) {
@@ -197,27 +200,38 @@
       if (g === s.tgrain) return;
       s.tgrain = g;
       s.tpage = 1; s.spage = 1;                       // 切分时重置页码
+      s.tBefore = 0; s.tPages = 0; s.tWinBack = 0;    // ★回到「最新窗口」(否则还在上一段历史里)
       Array.prototype.forEach.call(bar2.children, function (b) {
         b.classList.toggle('on', b.getAttribute('data-grain') === g);
       });
       if (s.refs.tbgrain) s.refs.tbgrain.textContent = tfLabel(g);
       if (s.refs.siggrain) s.refs.siggrain.textContent = tfLabel(g);
       if (s.refs.tbflabel) s.refs.tbflabel.textContent = tfLabel(g);
-      /* 同分时数据已有（K线区刚拉过）→ 直接复用，不发请求 */
-      if (g === s.grain && s.kdata && s.kdata.ok) { s.tdata = s.kdata; renderT(); renderSig(); }
-      else loadT();
+      /* ★原来这里复用 K线区的全窗数据省一次请求; 改为服务端分页后两者数据形状不同
+       *   (K线要全窗 leadCandles, 表格只要本页行) → 表格始终按自己的页码请求 */
+      loadT();
     });
   }
 
-  /* ---------------- 数据加载 ---------------- */
-  function fetchUpdown(grain) {
+  /* ---------------- 数据加载 ----------------
+   * o: { beforeTs, page, pageSize, bars, ttl }
+   *   ★服务端分页(2026-10-28): 传 page/pageSize 时后端只回该页的行(默认不传=全量, 零风险);
+   *     page 支持负数 —— -1 = 最新一页, 表格"最新在上"的首屏无需先知道总页数。
+   *   ★历史页是不可变的 → 不带 &t= 时间戳, 让 Net 层缓存生效, 回翻已看过的页秒开。 */
+  function fetchUpdown(grain, o) {
+    o = o || {};
     var s = st();
     var url = '/api/boards/updown?grain=' + encodeURIComponent(grain) + '&sector=' + encodeURIComponent(s.sector) +
-      '&lead=' + encodeURIComponent(s.lead) + '&bars=' + s.bars + '&t=' + Date.now();
-    return Net.get(url, { ttl: 8000, timeout: 60000 });
+      '&lead=' + encodeURIComponent(s.lead) + '&bars=' + (o.bars || s.bars);
+    if (o.beforeTs) url += '&beforeTs=' + o.beforeTs;
+    if (o.page && o.pageSize) url += '&page=' + o.page + '&pageSize=' + o.pageSize;
+    /* 历史页不可变 → 不带时间戳, Net 层缓存生效, 回翻看过的页秒开;
+     *   但「最新一页」会随时间增长 → 必须带 &t= 绕过缓存, 否则首屏数据可能滞后 30 秒 */
+    if (!o.page || o.fresh) url += '&t=' + Date.now();
+    return Net.get(url, { ttl: o.ttl || 8000, timeout: 60000 });
   }
 
-  /* K线分时数据（含顶部统计条） */
+  /* K线分时数据（含顶部统计条）—— 这里不分页：K线图需要连续窗口(默认 2000 根) */
   function loadK() {
     var s = st();
     fetchUpdown(s.grain).then(function (j) {
@@ -227,34 +241,49 @@
         return;
       }
       s.kdata = j;
-      /* 表格分时若与K线一致 → 同步复用（省一次全市场统计请求） */
-      if (s.tgrain === s.grain) s.tdata = j;
       renderK();
-      if (s.tgrain === s.grain) { renderT(); renderSig(); }
       if (s.refs.tflabel) s.refs.tflabel.textContent = tfLabel(s.grain);
       if (s.refs.tm) s.refs.tm.textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
     }).catch(function () { });
   }
 
-  /* 表格分时数据（详细表格 + 该分时回测） */
-  function loadT() {
+  /* 表格数据（详细表格 + 该分时回测）—— ★服务端分页版
+   *   只请求「当前页」(TPAGE_SIZE 行)而不是整个 2000 根窗口 → 单次传输 MB 级降到 KB 级。
+   *   方向换算: 后端 page 1 = 最早; 本表格"最新在上", UI 页码 1 = 最新
+   *             → serverPage = pages - (uiPage - 1)。首屏 pages 未知, 先传 -1 取末页。 */
+  var TPAGE_SIZE = 20;
+  function tServerPage(uiPage) {
+    var s = st(), pages = s.tPages || 0;
+    if (!pages) return -1;
+    return Math.max(1, pages - (uiPage - 1));
+  }
+  function loadT(uiPage, beforeTs) {
     var s = st();
-    if (s.tgrain === s.grain) {
-      /* 同分时：kdata 已有 → 复用；还在加载 → 等 loadK 回调统一渲染，不重复发请求 */
-      if (s.kdata && s.kdata.ok) { s.tdata = s.kdata; renderT(); renderSig(); }
-      return;
-    }
-    fetchUpdown(s.tgrain).then(function (j) {
+    uiPage = uiPage || 1;
+    if (beforeTs !== undefined) { s.tBefore = beforeTs; s.tPages = 0; }
+    if (s.refs.tb) s.refs.tb.innerHTML = '<div class="sg-note">表格加载中…</div>';
+    fetchUpdown(s.tgrain, {
+      beforeTs: s.tBefore || 0,
+      page: tServerPage(uiPage),
+      pageSize: TPAGE_SIZE,
+      fresh: (uiPage === 1 && !s.tBefore),      // 最新窗口的最新一页 → 不允许走前端缓存
+      ttl: 30000
+    }).then(function (j) {
       if (!j || !j.ok) {
         if (s.refs.tb) s.refs.tb.innerHTML = '<div class="sg-note">表格数据未就绪：' + esc((j && j.err) || '') + '</div>';
         return;
       }
       s.tdata = j;
+      var pi = j.pageInfo || null;
+      if (pi) {
+        s.tPages = pi.pages; s.tTotal = pi.total;
+        s.tpage = Math.max(1, pi.pages - pi.page + 1);   // 服务端页码 → UI 页码(最新在上)
+      }
       renderT();
       renderSig();
       if (s.refs.tbflabel) s.refs.tbflabel.textContent = tfLabel(s.tgrain);
       loadStreak();          // ★表格分时切换 → 连续涨跌统计跟着换周期
-    }).catch(function () { });
+    })['catch'](function () { });
   }
 
   /* ★连续涨跌家数 > 阈值 的区段统计（BTC 多空关系核实） */
@@ -443,7 +472,10 @@
       var rp = bi.upRatio;
       var diffTxt = (bi.diff === null || bi.diff === undefined) ? '-' : ((bi.diff > 0 ? '+' : '') + bi.diff);
       var total = bi.total || 0;
-      var pc = (i > 0 && list[i - 1] && isFinite(list[i - 1].c)) ? list[i - 1].c : null;
+      /* ★2026-10-28: 前收盘优先取服务端下发的 pc(整条序列里的真实前一根),
+       *   否则分页后每页第一行拿不到前收 → 涨幅/振幅/最低跌幅全变 "-" 的假空白 */
+      var pc = (ck.pc !== undefined && ck.pc !== null && isFinite(ck.pc)) ? +ck.pc
+        : ((i > 0 && list[i - 1] && isFinite(list[i - 1].c)) ? list[i - 1].c : null);
       var c = (ck.c !== null && ck.c !== undefined) ? +ck.c : null;
       var h = (ck.h !== null && ck.h !== undefined) ? +ck.h : null;
       var lo = (ck.l !== null && ck.l !== undefined) ? +ck.l : null;
@@ -505,16 +537,20 @@
     var s = st(), j = s.tdata;
     if (!j || !s.refs.tb) return;
     var rows = buildTableRows(j);
-    var tn = rows.length, tp = s.tPageSize || 20;
-    var pages = Math.max(1, Math.ceil(tn / tp));
+    /* ★服务端已裁好页 → rows 直接是本页内容(通常 20 行), 不再本地切一刀。
+     *   兜底: 万一没拿到 pageInfo(后端未分页), 本地限制在 100 行内防止一次性渲染几千行。 */
+    var pi = j.pageInfo || null;
+    var pages = (pi && pi.pages) || Math.max(1, Math.ceil(rows.length / 100));
+    var tn = (pi && pi.total) || rows.length;
     if (s.tpage > pages) s.tpage = pages;
     if (s.tpage < 1) s.tpage = 1;
-    var start = (s.tpage - 1) * tp, end = Math.min(start + tp, tn);
-    var html = rows.slice(start, end).map(function (x) { return x.html; }).join('');
+    if (!pi && rows.length > 100) rows = rows.slice((s.tpage - 1) * 100, s.tpage * 100);
+    var html = rows.map(function (x) { return x.html; }).join('');
+    var backTxt = s.tWinBack > 0 ? (' · 已回溯 <b>' + s.tWinBack + '</b> 段历史') : '';
     /* 表格本体进滚动容器；分页条在容器外固定可见 */
     s.refs.tb.innerHTML =
-      '<div class="ud-pginfo">第 <b>' + s.tpage + '</b> / <b>' + pages + '</b> 页 · 共 <b>' + tn +
-      '</b> 根 · 覆盖约 ' + (j.spanDays || 0) + ' 天</div>' +
+      '<div class="ud-pginfo">第 <b>' + s.tpage + '</b> / <b>' + pages + '</b> 页 · 当前窗口共 <b>' + tn +
+      '</b> 根 · 覆盖约 ' + (j.spanDays || 0) + ' 天' + backTxt + ' · 服务端分页(每页 ' + TPAGE_SIZE + ' 行)</div>' +
       '<table class="ud-excel"><thead>' +
       '<tr><th>时间</th><th>上涨家数</th><th>下跌家数</th>' +
       '<th>样本</th><th>上涨比例</th><th>差额(涨-跌)</th>' +
@@ -534,49 +570,25 @@
         if (t && t.dataset && t.dataset.older) { loadOlder(); return; }
         if (t && t.dataset && t.dataset.tp) {
           var p = parseInt(t.dataset.tp, 10);
-          if (!isNaN(p)) { s.tpage = p; renderT(); }
+          if (!isNaN(p) && p !== s.tpage) loadT(p);     // ★换页 → 向服务端请求该页
         }
       };
     }
   }
 
-  /* ★2026-10-28 往回翻更早历史（beforeTs）
-   *   后端 updown 已支持 beforeTs(翻到该时间戳为止), 这里把更早一批拼到序列前面。
-   *   用「严格早于当前最早 ts」过滤, 避免边界根重复拼接。 */
+  /* ★2026-10-28 「« 更早」: 以当前窗口最早一根为锚, 往回再开一个(2000 根的)历史窗口。
+   *   分工: 服务端分页 = 窗口内翻页; beforeTs = 跨窗口回溯。两者不重叠, 也不会重复行。
+   *   ★边界根防重: 后端 beforeTs 的口径是 ts<=beforeTs(含等于), 故传 oldest-1 保证严格更早。 */
   function loadOlder() {
     var s = st();
     if (s.loadingOlder) return;
     var j = s.tdata;
-    if (!j) return;
-    var bars = j.bars || [], lc = j.leadCandles || [];
-    var oldest = 0, i;
-    for (i = 0; i < lc.length; i++) if (!oldest || lc[i].ts < oldest) oldest = lc[i].ts;
-    for (i = 0; i < bars.length; i++) if (!oldest || bars[i].ts < oldest) oldest = bars[i].ts;
-    if (!oldest) return;
+    if (!j || !j.oldest) return;
     s.loadingOlder = true;
-    renderT();
-    var url = '/api/boards/updown?grain=' + encodeURIComponent(s.tgrain) +
-      '&sector=' + encodeURIComponent(s.sector) +
-      '&lead=' + encodeURIComponent(s.lead) +
-      '&bars=' + (s.bars || 2000) + '&beforeTs=' + oldest + '&t=' + Date.now();
-    Net.get(url, { ttl: 60000, timeout: 60000 }).then(function (r) {
-      s.loadingOlder = false;
-      if (!r || !r.ok) { renderT(); return; }
-      var mb = (r.bars || []).filter(function (x) { return x.ts < oldest; });
-      var ml = (r.leadCandles || []).filter(function (x) { return x.ts < oldest; });
-      if (!mb.length && !ml.length) { renderT(); return; }
-      s.tdata = {
-        ok: true, grain: r.grain || j.grain, sector: r.sector || j.sector, lead: r.lead || j.lead,
-        count: r.count || j.count, covCount: r.covCount || j.covCount,
-        bars: mb.concat(j.bars || []),
-        leadCandles: ml.concat(j.leadCandles || []),
-        oldest: mb.length ? mb[0].ts : j.oldest,
-        newest: j.newest, spanDays: j.spanDays, leadName: j.leadName,
-        stats: j.stats
-      };
-      s.tpage = 1;
-      renderT(); renderSig();
-    })['catch'](function () { s.loadingOlder = false; renderT(); });
+    s.tWinBack = (s.tWinBack || 0) + 1;
+    renderT();                       // 立刻把按钮变成「加载中」
+    s.loadingOlder = false;
+    loadT(1, j.oldest - 1);          // 新窗口先取它最新的一页(页码重置)
   }
 
   /* ---------------- ③ BTC 信号回测面板（跟随表格分时 · 分页可翻历史） ----------------

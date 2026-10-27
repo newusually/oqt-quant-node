@@ -59,8 +59,39 @@ const GRAIN_MS = {
 
 /* ---------------- 缓存（读全部库重，必须缓存） ----------------
  * ★2026-10-26: 最近几根(实时)用小 TTL，历史大窗口用长 TTL
- *   → 前端"最新15分钟"高频 AJAX 取实时值，老数据走长缓存不重复算 */
+ *   → 前端"最新15分钟"高频 AJAX 取实时值，老数据走长缓存不重复算
+ * ★2026-10-28 两级结构：① 计算缓存(只认「数据窗口」) ② 请求级分页裁剪
+ *   上一版把 page 写进 cacheKey → 每一页都各存一份「全量结果」, 翻 100 页
+ *   就是 100 份副本(每份约 0.5MB) —— 既吃内存又毫无收益。
+ *   现在: key = sector|grain|bars|beforeTs|lead(不含分页), 取出来再按 page 裁
+ *         → 翻页零重算、零冗余副本, 且绝不可能串页(裁剪发生在缓存之后)。
+ *   另: CACHE 加 LRU 条数上限 —— 1.9G 内存的小机器不能任由 Map 膨胀。 */
 const CACHE = new Map();
+const CACHE_MAX = 16;                  // ★最多缓存 16 个窗口, 超出按「最近使用」淘汰最老的
+function cachePut(k, v) {
+  if (CACHE.has(k)) CACHE.delete(k);   // 先删再插 → 排到队尾(=最近使用)
+  CACHE.set(k, v);
+  if (CACHE.size > CACHE_MAX) {
+    for (const kk of Array.from(CACHE.keys())) {
+      if (CACHE.size <= CACHE_MAX) break;
+      const vv = CACHE.get(kk);
+      if (vv && vv.refreshing) continue;   // 正在后台刷新的不删(删了 SWR 写入会重建旧对象)
+      CACHE.delete(kk);
+    }
+  }
+  /* 兜底: 全是刷新中 → 强制淘汰最陈旧的那个 */
+  if (CACHE.size > CACHE_MAX) {
+    let oldest = null;
+    for (const e of CACHE) if (!oldest || e[1].at < oldest[1].at) oldest = e;
+    if (oldest) CACHE.delete(oldest[0]);
+  }
+}
+function cacheTouch(k) {               // LRU: 命中后提到队尾
+  const v = CACHE.get(k);
+  if (!v) return null;
+  CACHE.delete(k); CACHE.set(k, v);
+  return v;
+}
 
 /* ★2026-10-28 Redis 共享缓存(可选): Redis 不可用时 RC 为 null, 全走进程内缓存 */
 let RC = null;
@@ -68,65 +99,121 @@ try { RC = require('./rediscache'); } catch (e) { RC = null; }
 /* Redis 单 key 上限保护: 128MB 内存里不能塞进超大对象(3m bars=18000 约 4.3MB) */
 const RC_MAX_BARS = 3000;
 
+/* ★2026-10-28 「各合约库尾最后一根」缓存（WS 实时前收基准）
+ *   原实现每次 calc 都要遍历 287 个 K线库取最后一根 —— 实测 ~450ms 的同步磁盘 IO,
+ *   而每 30s 缓存过期就要重算 → 主线程被反复卡住, 表现为「每页都要等 0.5 秒」。
+ *   它只在该周期「收线」时才会变化 → TTL 取「半个周期」天然安全(上限 60s)。 */
+const LC_CACHE = new Map();        // grain → {at, map}
+function fillLastClose(grain, list, lastClose) {
+  const ms = GRAIN_MS[grain] || 900000;
+  const ttl = Math.min(60000, Math.max(5000, Math.floor(ms / 2)));
+  const hit = LC_CACHE.get(grain);
+  if (hit && Date.now() - hit.at < ttl) {
+    for (const kv of hit.map) lastClose.set(kv[0], kv[1]);
+    return;
+  }
+  const map = new Map();
+  for (const x of list) {
+    const chain = KS.readChain(grain, x.instId, 0, 1);   // 只要最新片(+legacy 兜底)
+    if (!chain.length) continue;
+    const db = KS.roOpen(chain[0]);
+    if (!db) continue;
+    try {
+      const r = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT 1').get();
+      if (r) map.set(x.instId, { ts: r.ts, c: r.c });
+    } catch (e) { }
+  }
+  LC_CACHE.set(grain, { at: Date.now(), map: map });
+  for (const kv of map) lastClose.set(kv[0], kv[1]);
+}
+
+/* ---------------- 请求级分页裁剪 ----------------
+ * page 语义: 1 = 最早一页; **负数 = 从末尾倒数(-1 = 最新一页)**。
+ *   前端表格「最新在上」的首屏可直接取 -1, 不必先知道总页数。
+ * ★只裁 bars(表格行); leadCandles(K线) 始终返回「满窗口(≤bars)」——
+ *   用户明确要求 "K线保持全量 / leadCandles 仍全量(K线需要)"。
+ *   表格响应里带满窗 K线 ≈100KB, 但 bars(表格) 部分仅 ~2KB(原 4.3MB),
+ *   两者分开计费, 与用户 "传输从 4.3MB → 2KB(bars 部分)" 的口径一致。
+ * stats / oldest / newest / spanDays 一律保持全窗口口径(顶部统计条不随翻页变化)。 */
+function pageSlice(res, rqPage, rqSize) {
+  if (!rqPage || !rqSize) { res.pageInfo = null; return res; }   // 不传 = 全量, 行为完全不变
+  const all = res.bars || [];
+  const total = all.length;
+  const pages = Math.max(1, Math.ceil(total / rqSize));
+  let p = rqPage < 0 ? pages + rqPage + 1 : rqPage;
+  if (p < 1) p = 1;
+  if (p > pages) p = pages;
+  const s = (p - 1) * rqSize;
+  res.bars = all.slice(s, s + rqSize);          // 仅表格行分页
+  /* ★leadCandles 不裁: K线需要满窗口, 由前端按 s.bars 自行 slice */
+  res.pageInfo = { page: p, pageSize: rqSize, total: total, pages: pages, hasPrev: p > 1, hasNext: p < pages };
+  return res;
+}
+
 async function updown(opt) {
   opt = opt || {};
   const sector = opt.sector || '';
   const grain = opt.grain || '15m';
   const maxBars = 20000;   // ★两年(1h=17520根/2h=8760/4h=4380) 需要更大的窗口
-  const bars = Math.max(1, Math.min(maxBars, parseInt(opt.bars, 10) || 9000));
+  /* ★默认窗口 2000 根(原 9000): 15m≈21天/3m≈4天, 表格一屏 20 行 = 100 页, 足够用;
+   *   更长的历史由前端「« 更早」按 beforeTs 回溯, 不必一次传全量。
+   *   K线同样受此窗口约束 —— 用户要求"K线也应该限制窗口, 默认 2000 足够"。 */
+  const bars = Math.max(1, Math.min(maxBars, parseInt(opt.bars, 10) || 2000));
   /* ★按请求窗口决定缓存时长：窗口小=要实时 → 短缓存 */
   const tiny = bars <= 60;
   const CACHE_TTL = tiny ? 5000 : 30000;
   const beforeTs = parseInt(opt.beforeTs, 10) || 0;
   const lead = (opt.lead || 'BTC').toUpperCase();
-  const rqPage0 = parseInt(opt.page, 10) || 0;
-  const rqSize0 = parseInt(opt.pageSize, 10) || 0;
-  /* ★分页参数必须进 key: 否则第1页的全量结果会把第2页的请求"命中"掉 */
-  const cacheKey = [sector, grain, bars, beforeTs, lead, rqPage0, rqSize0].join('|');
-  const hit = CACHE.get(cacheKey);
-  if (hit && Date.now() - hit.at < CACHE_TTL) return hit.data;
+  const rqPage = parseInt(opt.page, 10) || 0;
+  const rqSize = parseInt(opt.pageSize, 10) || 0;
+  /* ★计算 key **不含分页**（含了会每页存一份全量副本, 见上方说明） */
+  const baseKey = [sector, grain, bars, beforeTs, lead].join('|');
+  const hit = CACHE.get(baseKey);
+
+  /* ★2026-10-28 Redis 共享缓存: 存/取的都是「基础全窗结果」, 分页在取出之后裁。
+   *   多进程(cluster)部署时各 worker 共享同一份结果, 不用各自算一遍全市场扫描。 */
+  if (RC && !hit && bars <= RC_MAX_BARS) {
+    try {
+      const rj = await RC.getJSON('ud:v3:' + baseKey);
+      if (rj && rj.bars && rj.bars.length) {
+        cachePut(baseKey, { at: Date.now(), refreshing: false, data: rj });
+        return pageSlice(Object.assign({}, rj, { fromRedis: true }), rqPage, rqSize);
+      }
+    } catch (e) { }
+  }
 
   /* ★2026-10-28 SWR（stale-while-revalidate）: 缓存过期但存在 → 立刻返回旧数据,
    *   同时在后台重算刷新, 下一个请求就是新的。
    *   缘起: 预聚合未启用时单次全市场扫描 3m 需 ~40 秒, 用户切一次分时白屏干等 40 秒;
    *         切回来发现又是新 key 又要 40 秒 → "切换分时特别慢"。
    *   SWR 后: 首次仍慢(后台预聚合完成后会消失), 之后任何切换都是毫秒级出数据。 */
-  /* ★查 Redis 共享缓存: 多进程(cluster)部署时各 worker 共享同一份结果,
-   *   避免每个进程各自算一遍 40 秒的全市场扫描。 */
-  if (RC && !hit && bars <= RC_MAX_BARS) {
-    try {
-      const rj = await RC.getJSON('ud:v2:' + cacheKey);
-      if (rj && rj.bars && rj.bars.length) {
-        /* 回填进程内缓存, 下次同参数直接内存命中(比 Redis 更快) */
-        CACHE.set(cacheKey, { at: Date.now(), refreshing: false, data: rj });
-        return Object.assign({}, rj, { fromRedis: true });
-      }
-    } catch (e) { }
-  }
-
-  if (hit && !hit.refreshing) {
-    hit.refreshing = true;
-    const key = cacheKey;
-    calc(sector, grain, bars, beforeTs, lead, opt).then(function (d) {
-      CACHE.set(key, {
-        at: Date.now(), refreshing: false,
-        data: Object.assign({ ok: true, at: Date.now(), stale: false }, d)
+  if (hit) {
+    cacheTouch(baseKey);
+    const fresh = Date.now() - hit.at < CACHE_TTL;
+    if (!fresh && !hit.refreshing) {
+      hit.refreshing = true;
+      const key = baseKey;
+      calc(sector, grain, bars, beforeTs, lead, opt).then(function (d) {
+        const dd = Object.assign({ ok: true, at: Date.now() }, d);
+        cachePut(key, { at: Date.now(), refreshing: false, data: dd });
+        if (RC && bars <= RC_MAX_BARS) { try { RC.setJSON('ud:v3:' + key, 60, dd); } catch (e) { } }
+      }).catch(function () {
+        const h = CACHE.get(key);
+        if (h) h.refreshing = false;      // 失败: 解除标记, 下次请求可再次触发刷新
       });
-    }).catch(function () {
-      const h = CACHE.get(key);
-      if (h) h.refreshing = false;      // 失败: 解除标记, 下次请求可再次触发刷新
-    });
-    return Object.assign({}, hit.data, { stale: true, staleAgeMs: Date.now() - hit.at });
+    }
+    const served = Object.assign({}, hit.data, { stale: !fresh, staleAgeMs: Date.now() - hit.at });
+    return pageSlice(served, rqPage, rqSize);
   }
 
   const data = await calc(sector, grain, bars, beforeTs, lead, opt);
-  const out = Object.assign({ ok: true, at: Date.now(), cached: !!hit && Date.now() - hit.at < CACHE_TTL * 2 }, data);
-  CACHE.set(cacheKey, { at: Date.now(), refreshing: false, data: out });
+  const out = Object.assign({ ok: true, at: Date.now() }, data);
+  cachePut(baseKey, { at: Date.now(), refreshing: false, data: out });
   /* ★写回 Redis(异步不等待, TTL 60s 与进程内缓存一致) */
   if (RC && bars <= RC_MAX_BARS) {
-    try { RC.setJSON('ud:v2:' + cacheKey, 60, out); } catch (e) { }
+    try { RC.setJSON('ud:v3:' + baseKey, 60, out); } catch (e) { }
   }
-  return out;
+  return pageSlice(Object.assign({}, out), rqPage, rqSize);
 }
 
 async function calc(sector, grain, bars, beforeTs, lead, opt) {
@@ -149,25 +236,21 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
   let pre = null;
   try {
     const ST = require('./updownstore');
-    if (!sector && (!lead || String(lead).toUpperCase() === 'BTC') && !beforeTs) pre = ST.agg(grain);
+    if (!sector && (!lead || String(lead).toUpperCase() === 'BTC')) {
+      /* ★2026-10-28 历史窗口(beforeTs)也走预聚合: 主键 (grain,ts) 索引直接取
+       *   ts<=beforeTs 的最近 bars 行 → 不必再退化成 287 个 K线库的实时扫描。 */
+      pre = ST.agg(grain, beforeTs ? { beforeTs: beforeTs, bars: bars + 1 } : null);
+    }
   } catch (e) { pre = null; }
 
   if (pre && pre.size) {
     for (const a of pre.values()) agg.set(a.ts, a);
     cov = list.length;
-    for (const x of list) {
-      const chain = KS.readChain(grain, x.instId, 0, 1);   // 只要最新片(+legacy 兜底)
-      if (!chain.length) continue;
-      const db = KS.roOpen(chain[0]);
-      if (!db) continue;
-      try {
-        const r = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT 1').get();
-        if (r) lastClose.set(x.instId, { ts: r.ts, c: r.c });
-      } catch (e) { }
-      if (leadInst && x.instId === leadInst.instId && !leadCandles) {
-        const full = tailCandles(x.instId, grain, bars, 0, 'ts,o,h,l,c,v');
-        if (full && full.length >= 2) leadCandles = full;
-      }
+    /* ★只有「最新窗口」才需要 WS 实时前收基准(历史窗口不发实时行情) */
+    if (!beforeTs) fillLastClose(grain, list, lastClose);
+    if (leadInst && !leadCandles) {
+      const full = tailCandles(leadInst.instId, grain, bars, beforeTs, 'ts,o,h,l,c,v');
+      if (full && full.length >= 2) leadCandles = full;
     }
   } else {
   for (const x of list) {
@@ -249,7 +332,9 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
     const isLive = (WS.isStarted && WS.isStarted()) || (WSF && typeof WSF.snapshot === 'function');
     /* ★liveTs >= lastTs 即执行: 保鲜拉取跨片边界时部分合约库内已有 liveTs
      *   进行中根(快照) → WS 现价更实时, 达标时覆盖; BTC 等库尾落后的合约则补根 */
-    if (isLive && lastTs && liveTs >= lastTs) {
+    /* ★历史窗口(beforeTs)不拼实时片: 否则会在历史序列末尾凭空多一根"现在"的行情,
+     *   表现为翻到更早历史时表格第一格时间突然跳回今天 */
+    if (isLive && lastTs && liveTs >= lastTs && !beforeTs) {
       const a = { ts: liveTs, up: 0, down: 0, flat: 0, n: 0 };
       for (const x of list) {
         const px = livePx(x.instId);
@@ -354,33 +439,22 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
   let leadAligned = (leadCandles || []).filter(r => outTs.has(r.ts));
   if (!leadAligned.length && leadCandles && leadCandles.length) leadAligned = leadCandles;
 
-  /* ★2026-10-28 服务端分页（默认关闭 = 行为完全不变, 前端传 page 才生效）
-   *   缘起: bars=18000 时 3m 单次响应实测 4.32 MB, 而表格一屏只显示 20 行 →
-   *         99.9% 的传输是浪费。用户明确要求"所有数据分页"。
-   *   口径: 与前端一致 —— 序列按时间升序(最新在最后), 第 1 页=最早。
-   *         stats 仍按全量 out 计算(顶部统计条不能随翻页变化)。
-   *   注: leadCandles(K线)不裁 —— K线图需要连续历史, 裁了会出现空洞。 */
-  const rqPage = parseInt(opt.page, 10) || 0;
-  const rqSize = parseInt(opt.pageSize, 10) || 0;
-  let pagedBars = out, pageInfo = null;
-  if (rqPage > 0 && rqSize > 0) {
-    const total = out.length;
-    const pages = Math.max(1, Math.ceil(total / rqSize));
-    const p = Math.min(rqPage, pages);
-    const s = Math.max(0, (p - 1) * rqSize);
-    pagedBars = out.slice(s, s + rqSize);
-    pageInfo = { page: p, pageSize: rqSize, total: total, pages: pages };
-  }
+  /* ★2026-10-28 服务端分页已上移到 pageSlice(): 缓存里永远只存「全窗结果」,
+   *   分页只发生在响应出口 —— 故这里 bars/leadCandles 一律返回全窗(=全量行为不变)。
+   *   leadCandles 同时带 pc(前一根收盘): 表格翻页后, 每页第一行不能靠数组邻居取前收,
+   *   否则会出现「最新几笔涨跌幅全 -」的假空白 —— 由服务端下发真实前收避免。 */
+  const leadOut = leadAligned.map((r, i) => ({
+    ts: r.ts, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v,
+    pc: i > 0 ? leadAligned[i - 1].c : null
+  }));
 
   return {
     ok: true, grain, sector, lead,
     count: list.length, covCount: cov,
-    bars: pagedBars,
-    pageInfo: pageInfo,
-    /* ★主力合约 K线全量（OHLCV），供前端叠加到BTC K线图 */
-    leadCandles: leadAligned.map(r => ({
-      ts: r.ts, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v
-    })),
+    bars: out,
+    pageInfo: null,
+    /* ★主力合约 K线（OHLCV，受 bars 窗口约束 ≈ 默认 2000 根）供前端叠加到BTC K线图 */
+    leadCandles: leadOut,
     oldest: out.length ? out[0].ts : 0, newest: out.length ? out[out.length - 1].ts : 0,
     spanDays: out.length ? +(((out[out.length - 1].ts - out[0].ts) / 86400000).toFixed(1)) : 0,
     leadName: (leadCandles && leadCandles.length) ? lead : '',

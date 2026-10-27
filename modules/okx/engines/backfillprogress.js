@@ -29,9 +29,17 @@ const SPAN = { '3m': 180000, '5m': 300000, '15m': 900000, '30m': 1800000,
 const GRAINS = ['3m', '5m', '15m', '1h', '2h', '4h'];   // ★2026-10-26 补齐短周期选项卡
 const DAY = 86400000;
 
-/* ---------------- 缓存（全量扫 287 个库较重） ---------------- */
+/* ---------------- 缓存（全量扫 287 个库较重） ----------------
+ * ★2026-10-28 性能事故修复: 原 CACHE_TTL=8s, 而前端每 10 秒轮询一次 →
+ *   几乎每次请求都触发一轮「287 合约 × 多月片」的 COUNT(*) 全索引扫描。
+ *   CPU profile 实测: statOne 独占 **70.5% CPU(9 分钟内 392 秒)**, 期间
+ *   Node 主线程被钉死 → 连静态 HTML 都要等 30~60 秒 —— 这才是"网站特别慢"的真凶。
+ *   组合拳: ①COUNT(*) → MIN/MAX(索引端点, O(log n))  ②单合约记忆 30s
+ *          ③整轮缓存 8s → 60s  ④过期先返回旧值(SWR)  ⑤构建循环让出主线程 */
 const CACHE = new Map();
-const CACHE_TTL = 8000;
+const CACHE_TTL = 60000;
+const ST_TTL = 30000;              // 单合约单粒度记忆
+const ST_CACHE = new Map();
 
 function readJson(p) {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; }
@@ -40,26 +48,47 @@ function readJson(p) {
 /* 单个合约单个粒度的落库情况（★月分片: 跨片聚合; 完全未迁移才计 legacy 整库,
  *   迁移中只算月片 —— 月片是 legacy 的子集, 双算会令进度虚高） */
 function statOne(instId, grain) {
+  /* ①记忆: 同一份库 30 秒内不重复读 */
+  const ck = grain + ':' + instId;
+  const memo = ST_CACHE.get(ck);
+  if (memo && Date.now() - memo.at < ST_TTL) return memo.v;
+
+  const span = SPAN[grain] || 3600000;
+  /* ②COUNT(*) → MIN/MAX: kline 表 ts 是 INTEGER PRIMARY KEY,
+   *   MIN/MAX 走索引端点(O(log n)), 而 COUNT(*) 必须把整棵索引扫一遍。
+   *   根数按「时间跨度 ÷ 周期 + 1」推算(K线时间轴连续, 与实际行数基本一致)。
+   *   ★注意: 若某合约存在长时间缺口, 推估值会比真实行数偏大 —— 这是进度估算场景可接受的
+   *     取舍(原本就要按覆盖天数外推), 换来的是主线程不再被钉死。 */
+  function statDb(db) {
+    if (!db) return null;
+    try {
+      const r = db.prepare('SELECT MIN(ts) mn, MAX(ts) mx FROM kline').get();
+      if (!r || !r.mn) return null;
+      return { have: Math.floor((r.mx - r.mn) / span) + 1, oldest: r.mn, newest: r.mx };
+    } catch (e) { return null; }
+  }
+
   let have = 0, oldest = 0, newest = 0;
   const months = KS.monthsOf(grain, instId);
   for (const ym of months) {
-    const db = KS.roOpen(KS.monthFile(grain, instId, ym));
-    if (!db) continue;
-    try {
-      const r = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
-      if (r && r.c) { have += r.c; if (!oldest || r.mn < oldest) oldest = r.mn; if (r.mx > newest) newest = r.mx; }
-    } catch (e) { }
+    const s = statDb(KS.roOpen(KS.monthFile(grain, instId, ym)));
+    if (!s) continue;
+    have += s.have;
+    if (!oldest || s.oldest < oldest) oldest = s.oldest;
+    if (s.newest > newest) newest = s.newest;
   }
+  /* 完全未迁移才计 legacy 整库; 迁移中双算会令进度虚高 */
   if (!months.length && KS.hasLegacy(grain, instId)) {
-    const db = KS.roOpen(KS.legacyFile(grain, instId));
-    if (db) {
-      try {
-        const r = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
-        if (r) { have = r.c || 0; oldest = r.mn || 0; newest = r.mx || 0; }
-      } catch (e) { }
-    }
+    const s = statDb(KS.roOpen(KS.legacyFile(grain, instId)));
+    if (s) { have = s.have; oldest = s.oldest; newest = s.newest; }
   }
-  return { have, oldest, newest };
+  const v = { have, oldest, newest };
+  ST_CACHE.set(ck, { at: Date.now(), v: v });
+  if (ST_CACHE.size > 4000) {                    // 粗粒度封顶, 防 Map 无限长
+    let n = 0;
+    for (const k of ST_CACHE.keys()) { ST_CACHE.delete(k); if (++n > 800) break; }
+  }
+  return v;
 }
 
 /* ---------------- 全量计算 ---------------- */
@@ -83,7 +112,12 @@ async function build(grain) {
   const targetRows = Math.floor(days * DAY / span);
   const now = Date.now();
 
-  const rows = u.list.map(x => {
+  const rows = [];
+  let nProc = 0;
+  for (const x of u.list) {
+    /* ⑤让出主线程: 287 个合约即便每个只要几毫秒, 连着跑也会把在线请求挡在后面,
+     *   表现为"打开页面一直在转圈"。每 16 个让一次, 在线请求插进来即可立即响应。 */
+    if (++nProc % 16 === 0) await new Promise(r => setImmediate(r));
     const st = statOne(x.instId, grain);
     const key = grain + ':' + x.instId;
     const d = doneMap[key];
@@ -100,15 +134,15 @@ async function build(grain) {
     let pct = ended ? 100 : Math.min(100, Math.max(0, coverDays / days * 100));
     if (!ended && effOldest && effOldest <= now - days * DAY) pct = 100;
     const status = pct >= 99.5 ? 'done' : (pct >= 50 ? 'most' : (have > 0 ? 'half' : 'none'));
-    return {
+    rows.push({
       inst: x.instId, sym: x.sym || x.instId, sector: x.sector || '',
       have: have, saved: st.have, target: ended ? Math.max(have, 1) : targetRows,
       pct: +pct.toFixed(1), remain: 0, ended: ended,
       coverDays: +coverDays.toFixed(1), oldest: effOldest, newest: st.newest,
       status: status, running: running,
       livePages: running ? (c.pages || 0) : 0
-    };
-  });
+    });
+  }
 
   /* ★还差多少根：按该合约已覆盖天数外推总量（上市不足一年的合约不会虚高到一年目标）；
    *   完全没数据的合约用「已完成合约的平均总量」估 —— 使 ETA 接近真实耗时 */

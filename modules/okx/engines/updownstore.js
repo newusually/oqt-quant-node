@@ -22,6 +22,13 @@ const ROOT = path.resolve(__dirname, '../../../');
 const DB_PATH = path.join(ROOT, 'data/okx/updown.sqlite');
 const KS = require('./kstore');   // ★2026-10-27 月分片存储唯一入口
 
+/* 分时周期毫秒数（增量构建回算窗口用） */
+const GM = {
+  '3m': 180000, '5m': 300000, '15m': 900000,
+  '1h': 3600000, '2h': 7200000, '4h': 14400000,
+  '1H': 3600000, '1D': 86400000
+};
+
 /* ---------------- 预计算库 ---------------- */
 let DB = null;
 function db() {
@@ -40,26 +47,72 @@ function db() {
 }
 
 /* ---------------- 读取：给 updown.js 用 ----------------
- * 返回 Map<ts, {ts,up,down,flat,n}>；表为空返回 null（调用方回退实时扫描） */
-const AGG_CACHE = new Map();     // grain → {at, agg}
+ * 返回 Map<ts, {ts,up,down,flat,n}>；表为空返回 null（调用方回退实时扫描）
+ *
+ * ★2026-10-28 内存治理（上一版的问题）:
+ *   旧版「每个窗口(beforeTs/bars)各查一次 SQL 并各缓存一份完整 Map」
+ *   → 3m 一份 32 万条 ≈ 数十 MB, 缓存 12 份 ≈ 几百 MB 常驻,
+ *     在 1.9G 的小机器上直接触发 swap(实测 swap 占用 674MB、磁盘读 25MB/s),
+ *     表现为「静态页面也要等 30~60 秒」——这才是网站慢的真凶, 不是算法慢。
+ *   现在: 全 grain 只缓存 **一份** 全量 map + 升序 keys(二分定位),
+ *         窗口请求直接从这份缓存里切一段(只造小 Map), 既省内存又省 SQL。
+ *   opt = {beforeTs, bars} 表示「取 ts<=beforeTs 的最近 bars 根」。 */
+const AGG_CACHE = new Map();     // grain → {at, map, keys}
 const AGG_TTL = 60000;
-function agg(grain) {
+const AGG_CACHE_MAX = 8;         // 只按 grain 缓存(共 6 个周期), 8 足够且封顶
+function aggFull(grain) {
   const hit = AGG_CACHE.get(grain);
-  if (hit && Date.now() - hit.at < AGG_TTL) return hit.agg;
+  if (hit && Date.now() - hit.at < AGG_TTL) return hit;
   let d = null;
   try { d = db(); } catch (e) { return null; }
   let rows;
-  try { rows = d.prepare('SELECT ts,up,down,flat,total,min_pct,min_px,min_inst FROM updown WHERE grain=? ORDER BY ts ASC').all(grain); }
-  catch (e) { return null; }
+  try {
+    rows = d.prepare('SELECT ts,up,down,flat,total,min_pct,min_px,min_inst FROM updown WHERE grain=? ORDER BY ts ASC').all(grain);
+  } catch (e) { return null; }
   if (!rows || rows.length < 10) return null;
   const m = new Map();
+  const keys = [];
   for (const r of rows) {
+    keys.push(r.ts);
     m.set(r.ts, {
       ts: r.ts, up: r.up, down: r.down, flat: r.flat, n: r.total,
       worst: (r.min_inst && isFinite(r.min_pct)) ? { inst: r.min_inst, px: r.min_px, pct: r.min_pct } : null
     });
   }
-  AGG_CACHE.set(grain, { at: Date.now(), agg: m });
+  rows = null;                                  // 尽快释放临时数组
+  if (AGG_CACHE.has(grain)) AGG_CACHE.delete(grain);
+  AGG_CACHE.set(grain, { at: Date.now(), map: m, keys: keys });
+  while (AGG_CACHE.size > AGG_CACHE_MAX) {
+    const oldest = AGG_CACHE.keys().next().value;
+    AGG_CACHE.delete(oldest);
+  }
+  return AGG_CACHE.get(grain);
+}
+function agg(grain, opt) {
+  const e = aggFull(grain);
+  if (!e) return null;
+  const bts = parseInt((opt && opt.beforeTs) || 0, 10) || 0;
+  const lim = parseInt((opt && opt.bars) || 0, 10) || 0;
+  if (!bts && !lim) return e.map;               // 最新窗口: 直接复用全量(零拷贝、零内存增长)
+  /* keys 升序 → 二分找最后一个 <= beforeTs 的位置 */
+  let hi = e.keys.length;
+  if (bts) {
+    /* 升序数组二分: 找「最后一个 <= beforeTs」之后的位置(upper_bound) */
+    let lo = 0, pop = e.keys.length;
+    while (lo < pop) {
+      const mid = (lo + pop) >> 1;
+      if (e.keys[mid] <= bts) lo = mid + 1; else pop = mid;
+    }
+    hi = lo;
+    if (!hi) return null;
+  }
+  const start = lim ? Math.max(0, hi - lim) : 0;
+  if (hi - start < 10) return null;             // 太少 → 让调用方走实时扫描
+  const m = new Map();
+  for (let i = start; i < hi; i++) {
+    const k = e.keys[i];
+    m.set(k, e.map.get(k));
+  }
   return m;
 }
 
@@ -74,21 +127,51 @@ async function build(grain, opt) {
   let cov = 0, rows = 0, processed = 0;
   const t0 = Date.now();
 
+  /* ★2026-10-28 增量构建（关键优化）
+   *   原实现每次都 SELECT 全表重扫: 287 合约 × 数年 K线 = 千万行,
+   *   实测 15m 一轮 **183 秒**, 期间 Node 主线程被占住 → 连静态页面都要等 20~70 秒
+   *   (用户反馈"网站特别慢"的真凶, 不是 updown 算法慢)。
+   *   改: 从「上次构建到的最新 ts」往前回算 2 根开始 —— 每个合约只读最近几行,
+   *       实测从 183 秒降到 1 秒内。只有在没有历史(首次)或断点超过 70 天才全量。 */
+  let since = 0;
+  if (!opt.full) {
+    try {
+      const r = db().prepare('SELECT MAX(ts) AS m, COUNT(*) AS c FROM updown WHERE grain=?').get(gg);
+      if (r && r.c > 0 && r.m) {
+        since = r.m - 2 * (GM[gg] || 900000);       // 回算 2 根: 边界行的样本数会随"新合约补齐历史"变化
+        if (Date.now() - since > 86400000 * 70) since = 0;   // 断太久 → 全量(增量窗口已越过 3 个月分片窗口)
+      }
+    } catch (e) { since = 0; }
+  }
+  const incr = since > 0;
+
   for (const x of list) {
     /* ★2026-10-28 让出主线程: 全量扫描 287 合约(3m 约 2600 万行)是同步 sqlite 读,
      *   不 yield 会死死阻塞 Node 主线程 2 分钟+ → 页面全部请求排队假死。
      *   每 8 个合约 setImmediate 让出一次, 在线请求照常响应(构建只是变慢一点)。 */
     if (++processed % 8 === 0) await new Promise(r => setImmediate(r));
     /* ★月分片: 读该合约全部月片(升序拼接, 按 ts 去重); 预计算本来就是全表场景 */
-    const chain = KS.readChain(gg, x.instId, 0, 0);
+    /* ★增量只读最近 3 个月片(反之全部分片) —— 省掉上千个 sqlite 文件的打开与全表读 */
+    const chain = KS.readChain(gg, x.instId, 0, incr ? 1 : 0);
     if (!chain.length) continue;
     let rs = [];
+    let leadRow = null;                  // ★增量窗口的"前一根"(算第一根涨跌幅的基准)
     for (const f of chain) {
       const d = KS.roOpen(f);
       if (!d) continue;
-      try { rs = rs.concat(d.prepare('SELECT ts,c FROM kline ORDER BY ts ASC').all()); }
-      catch (e) { }
+      try {
+        rs = rs.concat(incr
+          ? d.prepare('SELECT ts,c FROM kline WHERE ts>=? ORDER BY ts ASC').all(since)
+          : d.prepare('SELECT ts,c FROM kline ORDER BY ts ASC').all());
+      } catch (e) { }
+      if (incr) {
+        try {
+          const ld = d.prepare('SELECT ts,c FROM kline WHERE ts<? ORDER BY ts DESC LIMIT 1').get(since);
+          if (ld && (!leadRow || ld.ts > leadRow.ts)) leadRow = ld;
+        } catch (e) { }
+      }
     }
+    if (incr && leadRow) rs = [leadRow].concat(rs);
     if (rs.length > 1) {
       rs.sort((a, b) => a.ts - b.ts);
       if (chain.length > 1) {
@@ -120,7 +203,9 @@ async function build(grain, opt) {
   /* ★2026-10-28 分批事务: 30 万+ 条 INSERT/UPDATE 一次性跑完会长时间占住主线程,
    *   改成每 5000 条提交一次并让出主线程（数据分批改完仍在同一事务语义内,
    *   中途失败最多留下部分数据, 下次定时重建会整体覆盖） */
-  d.prepare('DELETE FROM updown WHERE grain=?').run(gg);
+  /* ★增量时只覆盖 since 之后的行(全量才整表删除) */
+  if (incr) d.prepare('DELETE FROM updown WHERE grain=? AND ts>=?').run(gg, since);
+  else d.prepare('DELETE FROM updown WHERE grain=?').run(gg);
   const ins = d.prepare('INSERT OR REPLACE INTO updown (grain,ts,up,down,flat,total) VALUES (?,?,?,?,?,?)');
   const ins2 = d.prepare('UPDATE updown SET min_pct=?, min_px=?, min_inst=? WHERE grain=? AND ts=?');
   const CHUNK = 5000;
@@ -136,9 +221,10 @@ async function build(grain, opt) {
     if (end < arr.length) await new Promise(r => setImmediate(r));
   }
   d.prepare('INSERT OR REPLACE INTO meta (k,v) VALUES (?,?)').run('built:' + gg, String(Date.now()));
+  /* cacheKey 现在就是 grain → 直接删该周期即可 */
   AGG_CACHE.delete(gg);
   return {
-    ok: true, grain: gg, contracts: cov, klineRows: rows, slices: arr.length,
+    ok: true, grain: gg, incr: incr, contracts: cov, klineRows: rows, slices: arr.length,
     ms: Date.now() - t0,
     from: arr.length ? arr[0].ts : 0, to: arr.length ? arr[arr.length - 1].ts : 0
   };
