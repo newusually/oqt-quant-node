@@ -516,17 +516,19 @@
     BACKFILL_BUSY = true;
     var btn = $('btn-backfill');
     if (btn) { btn.disabled = true; btn.textContent = '回补中…'; }
-    toast('开始回补最近 ' + days + ' 天历史…');
-    api('backfill', { inst: inst, tf: TF, days: days, rounds: 60 }).then(function (r) {
+    toast('开始回补最近 ' + days + ' 天历史(拉到 OKX 数据尽头自动停)…');
+    /* ★2026-10-27 二期: days 90→365 尽力拉一年, OKX 尽头自动停(floor 标记, 以后点击秒回);
+     *   rounds 300→800 页兜底(800×300根=24万根≈833天>365天) */
+    api('backfill', { inst: inst, tf: TF, days: days, rounds: 800 }).then(function (r) {
       BACKFILL_BUSY = false;
-      if (btn) { btn.disabled = false; btn.textContent = '⏪ 补30天'; }
+      if (btn) { btn.disabled = false; btn.textContent = '⏪ 补1年'; }
       if (!r || !r.ok) { toast('回补失败: ' + ((r && r.err) || '未知'), true); return; }
       var d = r.oldest ? new Date(r.oldest).toISOString().slice(0, 10) : '-';
-      toast('回补完成 · 新增 ' + r.added + ' 根 · 本地共 ' + r.total + ' 根 · 最早 ' + d);
+      toast('回补完成 · 新增 ' + r.added + ' 根 · 本地共 ' + r.total + ' 根 · 最早 ' + d + (r.done ? ' (已到 OKX 数据尽头)' : ''));
       loadKline();
     }).catch(function (e) {
       BACKFILL_BUSY = false;
-      if (btn) { btn.disabled = false; btn.textContent = '⏪ 补30天'; }
+      if (btn) { btn.disabled = false; btn.textContent = '⏪ 补1年'; }
       toast('回补失败: ' + e, true);
     });
   }
@@ -671,7 +673,7 @@
     $('inst-search').addEventListener('input', function () { renderInstList(this.value); });
     $('mainInd-sel').addEventListener('change', renderChart);
     $('subInd-sel').addEventListener('change', renderChart);
-    $('btn-backfill').onclick = function () { doBackfill(30); };
+    $('btn-backfill').onclick = function () { doBackfill(365); };
     // ★自由布局(面板拖动/缩放/悬浮/隐藏/删除/复位)
     var bDock = $('btn-dock'), bDockR = $('btn-dock-reset');
     if (window.Dock) {

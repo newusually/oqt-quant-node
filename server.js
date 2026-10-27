@@ -13,6 +13,37 @@ const log = require('./core/log');
 const guard = require('./core/guard');
 guard.install({ heartbeatMs: 60000 });
 
+// ★单实例锁（2026-10-27）：防止 systemd + 手动 nohup 双开
+//   双开的危害实测：OKX 限流翻倍(50011惩罚→下载奇慢) + 同一批 SQLite WAL 锁竞争 + 磁盘写 94% 打满。
+//   规则：锁文件里的 PID 还活着 → 本次启动直接退出；锁是残留（旧进程已死）→ 接管。
+//   ★判活必须区分 EPERM/ESRCH：非 root 用户对 root 进程 kill 0 报 EPERM——进程活着但没权限。
+//   ★锁文件放 /tmp（全局可写）：data 目录 root 所有，ubuntu 用户写不进锁会让防护失效。
+const LOCK_FILE = '/tmp/oqt-quant-node.lock';
+(function singleInstance() {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const oldPid = parseInt(fs.readFileSync(LOCK_FILE, 'utf8').trim(), 10);
+      if (oldPid && oldPid !== process.pid) {
+        let alive = false;
+        try { process.kill(oldPid, 0); alive = true; }
+        catch (e) { alive = (e.code === 'EPERM'); }   // EPERM=活着(没权限发信号)；ESRCH=真死了
+        if (alive) {
+          console.error(`[lock] 已有实例在运行 PID=${oldPid}，本次启动退出。` +
+            `重启请用: sudo systemctl restart oqt-quant-node`);
+          process.exit(1);
+        }
+        console.error('[lock] 检测到残留锁（旧进程已死），接管继续');
+      }
+    }
+    fs.writeFileSync(LOCK_FILE, String(process.pid));
+    process.on('exit', () => {
+      try {
+        if (fs.readFileSync(LOCK_FILE, 'utf8').trim() === String(process.pid)) fs.unlinkSync(LOCK_FILE);
+      } catch (e) { }
+    });
+  } catch (e) { console.error('[lock] 锁检查失败(不阻塞启动):', e.message); }
+})();
+
 const ROOT = __dirname;
 const PORT = process.env.PORT || 8080;
 
@@ -268,10 +299,13 @@ server.listen(PORT, () => {
         const u = await T.universe();
         if (!u.ok || !u.list || !u.list.length) { console.log('[ud15m] universe 未就绪, 回填跳过'); return; }
         const list = u.list.map(x => ({ instId: x.instId }));
-        console.log('[ud15m] 启动 15m 三个月后台回填, ' + list.length + ' 个合约（断点续传, 下载中不影响在线）');
+        console.log('[ud15m] 启动 15m 一年后台回填(尽力拉到OKX数据尽头), ' + list.length + ' 个合约（断点续传, 下载中不影响在线）');
         /* ★2026-10-26 降并发: node:sqlite 同步写入会阻塞主事件循环, concurrency 6×多调度=全站卡20s
-         *   → 降到 2, 保证在线请求(板块/涨跌/信号)不被堵死 */
-        BF.runBatch({ kind: 'kline', grain: '15m', days: 90, list, jobKey: 'ud15m', concurrency: 2 })
+         *   → 降到 2, 保证在线请求(板块/涨跌/信号)不被堵死
+         * ★2026-10-27 用户: "尽力查询最近一年数据 如果真的是新币就查询最远的数据返回就行 不要超过边界"
+         *   → days 90→365: 尽力拉一年; OKX 实际只保留 ~100 天, 拉到尽头 done+floor 标记,
+         *     之后重启/重跑全部秒过, 不越界不重拉 */
+        BF.runBatch({ kind: 'kline', grain: '15m', days: 365, list, jobKey: 'ud15m', concurrency: 4 })
           .then(r => console.log('[ud15m] 回填完成: ' + JSON.stringify(r.ok ? r.job : r)))
           .catch(e => console.log('[ud15m] 回填异常: ' + (e && e.message || e)));
       } catch (e) {
@@ -290,10 +324,11 @@ server.listen(PORT, () => {
         const u = await T.universe();
         if (!u.ok || !u.list || !u.list.length) { console.log('[sigbf] universe 未就绪, 信号周期回补跳过'); return; }
         const list = u.list.map(x => ({ instId: x.instId }));
-        /* ★2026-10-26 三周期串行(不并发)+低并发2: 避免24路同步sqlite写阻塞主线程 */
-        for (const g of ['3m', '2h', '4h']) {
+        /* ★2026-10-26 三周期串行(不并发)+低并发2: 避免24路同步sqlite写阻塞主线程
+         * ★2026-10-27 days 90→365: 尽力拉一年, OKX 尽头即停(floor 标记防越界重拉) */
+        for (const g of ['1h', '2h', '4h', '3m', '5m']) {
           try {
-            const r = await BF.runBatch({ kind: 'kline', grain: g, days: 90, list, jobKey: 'sigbf:' + g, concurrency: 2 });
+            const r = await BF.runBatch({ kind: 'kline', grain: g, days: 365, list, jobKey: 'sigbf:' + g, concurrency: 4 });
             console.log('[sigbf:' + g + '] 回填完成: ' + JSON.stringify((r && r.job) ? r.job : r));
           } catch (e) {
             console.log('[sigbf:' + g + '] 回填异常: ' + (e && e.message || e));

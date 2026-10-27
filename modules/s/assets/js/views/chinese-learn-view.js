@@ -42,6 +42,8 @@
       '</div></div>',
       '<div class="ctr"><button class="btn spk" @click="readAllChar">🔊 按顺序读所有字</button></div>',
       '<div class="hint">👆 点一张字卡，翻出拼音和图片</div>',
+      '<div class="ctr"><button class="btn next" @click="startCr">🎬 情景识字课堂（先点开一个字）</button></div>',
+      '<div class="cr-host" v-show="crOn" ref="crChar"></div>',
       '</div>',
       '<div class="card lpanel" v-show="tab === \'prac\'">',
       '<div class="qtext" v-if="prac.kind === \'zuci\'">用“<b>{{prac.zi}}</b>”组词，选出正确的：</div>',
@@ -71,6 +73,7 @@
     data: function () {
       return {
         tabs: TABS, tab: "py",
+        crOn: false,
         py: CL.pinyin,
         chars: CL.characters.map(function (c) { return { zi: c.zi, py: c.py, img: c.img, open: false }; }),
         texts: CL.texts.map(function (t) { return { title: t.title, body: t.body, tip: t.tip, open: false }; }),
@@ -87,15 +90,30 @@
       svg: function (id) { return IMG.svg(id) || "⭐"; },
       bodyHtml: function (t) { return App.NLP ? App.NLP.annotate(t.body) : t.body; },
       say: function (t) { Speech.speak(t); },
+      /* ★情景识字课堂: 老师出字+跟读+田字格演示 */
+      startCr: function () {
+        var self = this;
+        if (self._cr) { try { self._cr.destroy(); } catch (e) {} self._cr = null; }
+        self.crOn = !self.crOn;
+        if (!self.crOn) return;
+        var c = self.chars.filter(function (x) { return x.open; })[0] || self.chars[0];
+        self.$nextTick(function () {
+          var host = self.$refs.crChar;
+          host = Array.isArray(host) ? host[0] : host;
+          if (!host || !App.Classroom) return;
+          self._cr = App.Classroom.mount(host, App.Classroom.ziScript(c.zi, c.py), { doneTip: "🎓 学会啦！翻开别的字继续上识字课" });
+        });
+      },
       readPy: function (s) { Speech.speakPinyin(s, { rate: 0.7 }); },
       readAllPy: function () {
         var all = this.py.shengmu.concat(this.py.yunmu).concat(this.py.zhengti);
-        Speech.seq(all.slice());
+        /* ★字母一律转呼读音(b→波), 绝不直接读英文字母 */
+        Speech.seq(all.map(function (p) { return { t: (Speech.pyText ? Speech.pyText(p) : p) }; }));
       },
       flipChar: function (i) {
         var c = this.chars[i];
         c.open = true;
-        Speech.speak(c.zi + "，" + c.py);
+        Speech.speak(c.zi + "，" + (Speech.pyText ? Speech.pyText(c.py) : c.py));
       },
       readAllChar: function () {
         var self = this;

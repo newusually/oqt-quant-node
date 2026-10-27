@@ -10,7 +10,7 @@
   var SUBJ_NAME = { chinese: "语文", math: "数学", english: "英语" };
   var SUBJ_ICON = { chinese: "📖", math: "🧮", english: "🔤" };
   var TYPE_NAME = {
-    unit: "单元测试", mid: "期中复习", final: "期末冲刺", kp: "专项练习",
+    pinyin: "拼音专项", unit: "单元测试", mid: "期中复习", final: "期末冲刺", kp: "专项练习",
     review: "综合复习", hard: "提升挑战", wrong: "易错专练", speed: "限时挑战"
   };
   var TYPE_ICON = {
@@ -29,7 +29,9 @@
     var key = subject + "-" + grade;
     if (!bankCache[key]) {
       var d = App.DATA && App.DATA.exam && App.DATA.exam[key];
-      if (!d) { bankCache[key] = null; return null; }
+      /* ★2026-10-27 懒加载: 题库未加载时不再缓存 null —— 否则 App.Bank.loadBank
+       *   注入题库后这里永远返回 null(旧值卡住)。未加载就返回 null 不缓存。 */
+      if (!d) return null;
       var byId = {}, i;
       for (i = 0; i < d.qs.length; i++) { byId[d.qs[i].i] = d.qs[i]; }
       bankCache[key] = { kps: d.kps || {}, byId: byId, meta: d.meta };
@@ -106,12 +108,19 @@
       switch (q.t) {
         case "single":
         case "judge":
-          return ans === q.a;
+          if (ans === q.a) return true;                      // ans 本身就是下标/同值
+          if (q.o && typeof q.a === "number") return q.o[q.a] === ans;   // a=下标, ans=内容
+          if (q.o && typeof q.a === "string") return q.o.indexOf(q.a) === ans; // a=内容, ans=下标
+          return false;
         case "multiple":
           if (!Array.isArray(ans) || !Array.isArray(q.a)) return false;
           if (ans.length !== q.a.length) return false;
+          /* a 可能是下标数组或内容数组, 两种都收进集合再比对 */
           var s = {}, i;
-          for (i = 0; i < q.a.length; i++) s[q.a[i]] = 1;
+          for (i = 0; i < q.a.length; i++) {
+            s[q.a[i]] = 1;
+            if (q.o && q.o[q.a[i]] !== undefined) s[q.o[q.a[i]]] = 1;
+          }
           for (i = 0; i < ans.length; i++) { if (!s[ans[i]]) return false; }
           return true;
         case "fill":

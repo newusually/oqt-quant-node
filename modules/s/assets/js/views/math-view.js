@@ -23,6 +23,7 @@
       '<span class="op" v-if="c.op">{{c.op}}</span>',
       '</div>',
       '<div class="scap" v-if="scene.cap">{{scene.cap}}</div>',
+      '<div class="mviz-slot" v-html="mvizHtml"></div>',
       '</div>',
       '<div class="answer" v-if="q.type === \'n\'">',
       '<input ref="inp" type="number" inputmode="numeric" placeholder="？" autocomplete="off" v-model="answer" @keydown.enter="check()">',
@@ -54,7 +55,19 @@
       };
     },
     computed: {
-      stars: function () { return this.score >= (this.quiz.length * 10 * 0.9) ? "🌟🌟🌟" : this.score >= (this.quiz.length * 10 * 0.6) ? "🌟🌟" : "🌟"; }
+      stars: function () { return this.score >= (this.quiz.length * 10 * 0.9) ? "🌟🌟🌟" : this.score >= (this.quiz.length * 10 * 0.6) ? "🌟🌟" : "🌟"; },
+      /* ★MathViz 图形化(computed, v-html 正确解引用; 曾放 methods 导致渲染函数源码) */
+      mvizHtml: function () {
+        try {
+          var sc = this.q && this.q.scene && this.q.scene[0];
+          if (!sc || !App.MathViz) return "";
+          var kind = sc[0], a = sc[2], b = sc[3];
+          if (kind !== "add" && kind !== "sub") return "";
+          if (typeof a !== "number" || typeof b !== "number") return "";
+          if (a > 24 || b > 24) return "";
+          return App.MathViz.svg({ op: kind, a: a, b: b });
+        } catch (e) { return ""; }
+      }
     },
     mounted: function () {
       var self = this;

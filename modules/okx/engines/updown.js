@@ -19,10 +19,34 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { DatabaseSync } = require('node:sqlite');
 const I = require('./universe');
+const KS = require('./kstore');   // ★2026-10-27 月分片存储唯一入口({bar}/{inst}/{ym}.sqlite)
 
-const KLINE_DIR = path.resolve(__dirname, '../../../data/okx/kline');
+/* ★月分片: 从最新片往旧凑"最近 bars+1 根"(beforeTs 限定历史窗口), 升序返回。
+ *   每片都带 WHERE ts<=beforeTs(旧片无副作用, 新片正确截断); 跨片按 ts 去重。 */
+function tailCandles(instId, grain, bars, beforeTs, cols) {
+  const chain = KS.readChain(grain, instId, beforeTs || 0, bars + 1);
+  let out = [];
+  for (const f of chain) {                    // chain 从新到旧
+    const db = KS.roOpen(f);
+    if (!db) continue;
+    try {
+      const part = beforeTs
+        ? db.prepare('SELECT ' + cols + ' FROM kline WHERE ts <= ? ORDER BY ts DESC LIMIT ?').all(beforeTs, bars + 1)
+        : db.prepare('SELECT ' + cols + ' FROM kline ORDER BY ts DESC LIMIT ?').all(bars + 1);
+      out = out.concat(part);
+    } catch (e) { }
+    if (out.length >= bars + 1) break;
+  }
+  if (!out.length) return [];
+  out.sort((a, b) => a.ts - b.ts);
+  if (chain.length > 1) {
+    const seen = new Set();
+    out = out.filter(r => (seen.has(r.ts) ? false : (seen.add(r.ts), true)));
+  }
+  if (out.length > bars + 1) out = out.slice(out.length - (bars + 1));
+  return out;
+}
 
 /* 分时周期毫秒数（进行中片的 liveTs 对齐用） */
 const GRAIN_MS = {
@@ -31,30 +55,7 @@ const GRAIN_MS = {
   '1H': 3600000, '1D': 86400000
 };
 
-/* ---------------- 只读连接池（复用 kline.js 思路，避免 open/close） ---------------- */
-const RO_POOL = new Map();
-const RO_MAX = 150;
-function storePath(instId, bar) {
-  return path.join(KLINE_DIR, (instId + '_' + bar).replace(/[^A-Za-z0-9_-]/g, '_') + '.sqlite');
-}
-function roStore(instId, bar) {
-  const sp = storePath(instId, bar);
-  if (!fs.existsSync(sp)) return null;
-  let db = RO_POOL.get(sp);
-  if (db) { RO_POOL.delete(sp); RO_POOL.set(sp, db); return db; }
-  try {
-    db = new DatabaseSync(sp, { readOnly: true });
-    db.exec('PRAGMA busy_timeout=30000;');
-  } catch (e) { return null; }
-  RO_POOL.set(sp, db);
-  while (RO_POOL.size > RO_MAX) {
-    const oldest = RO_POOL.keys().next().value;
-    const od = RO_POOL.get(oldest);
-    RO_POOL.delete(oldest);
-    try { if (od) od.close(); } catch (e) { }
-  }
-  return db;
-}
+/* ---------------- 只读连接池已收敛到 kstore.js（月分片版共用 LRU） ---------------- */
 
 /* ---------------- 缓存（读全部库重，必须缓存） ----------------
  * ★2026-10-26: 最近几根(实时)用小 TTL，历史大窗口用长 TTL
@@ -107,46 +108,30 @@ async function calc(sector, grain, bars, beforeTs, lead) {
     for (const a of pre.values()) agg.set(a.ts, a);
     cov = list.length;
     for (const x of list) {
-      const db = roStore(x.instId, grain);
+      const chain = KS.readChain(grain, x.instId, 0, 1);   // 只要最新片(+legacy 兜底)
+      if (!chain.length) continue;
+      const db = KS.roOpen(chain[0]);
       if (!db) continue;
       try {
         const r = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT 1').get();
         if (r) lastClose.set(x.instId, { ts: r.ts, c: r.c });
       } catch (e) { }
       if (leadInst && x.instId === leadInst.instId && !leadCandles) {
-        try {
-          const full = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts DESC LIMIT ?').all(bars + 1);
-          full.reverse();
-          if (full && full.length >= 2) leadCandles = full;
-        } catch (e) { leadCandles = null; }
+        const full = tailCandles(x.instId, grain, bars, 0, 'ts,o,h,l,c,v');
+        if (full && full.length >= 2) leadCandles = full;
       }
     }
   } else {
   for (const x of list) {
-    const db = roStore(x.instId, grain);
-    if (!db) continue;
-    let rows;
-    let rowsFull;                       // ★仅主力合约：取完整 OHLCV 用于画K线
-    try {
-      if (beforeTs) {
-        rows = db.prepare('SELECT ts,c FROM kline WHERE ts <= ? ORDER BY ts DESC LIMIT ?').all(beforeTs, bars + 1).reverse();
-      } else {
-        rows = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT ?').all(bars + 1).reverse();
-      }
-    } catch (e) { continue; }
+    const rows = tailCandles(x.instId, grain, bars, beforeTs, 'ts,c');
     if (!rows || rows.length < 2) continue;
     cov++;
     /* ★记录每合约库尾（WS 进行中片聚合的前收基准） */
     lastClose.set(x.instId, { ts: rows[rows.length - 1].ts, c: rows[rows.length - 1].c });
     /* ★主力合约额外取完整 OHLCV（画K线用），与涨跌家数同轴 */
     if (leadInst && x.instId === leadInst.instId && !leadCandles) {
-      try {
-        const full = beforeTs
-          ? db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts DESC LIMIT ?').all(beforeTs, bars + 1)
-          : db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts DESC LIMIT ?').all(bars + 1);
-        full.reverse();
-        if (full && full.length >= 2) leadCandles = full;
-      } catch (e) { leadCandles = null; }
+      const full = tailCandles(x.instId, grain, bars, beforeTs, 'ts,o,h,l,c,v');
+      if (full && full.length >= 2) leadCandles = full;
     }
     for (let i = 1; i < rows.length; i++) {
       const prev = rows[i - 1].c, cur = rows[i].c;
@@ -332,4 +317,4 @@ async function calc(sector, grain, bars, beforeTs, lead) {
   };
 }
 
-module.exports = { updown, storePath };
+module.exports = { updown };

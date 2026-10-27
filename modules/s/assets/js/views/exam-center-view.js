@@ -21,6 +21,7 @@
     return { pre: s.slice(0, i), post: s.slice(i + m[0].length) };
   }
   function shuffledArr(a) { return U.shuffled(a.slice()); }
+  function plainOpt(s) { return String((s === null || s === undefined) ? "" : s).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim(); }
 
   App.views.examCenter = {
     name: "exam-center",
@@ -48,14 +49,19 @@
         pairSel: {},               // 题下标 -> 当前选中的左项
         pairMap: {},               // 题下标 -> {左idx: 右值}
         rightOrder: {},            // 题下标 -> 右列顺序（固定）
+        locked: {},                // 题下标 -> 1 已判定(答案锁定)
+        fb: {},                    // 题下标 -> {ok, mine, right, exp} 即时反馈
         submitted: false,
         result: null,              // {score, total, detail:[{q, ok, ans}]}
+        papersRev: 0,              // ★懒加载信号: 卷单/题库异步注入后 ++, 驱动 computed 重算
+        loadingPaper: false,       // 开卷中(题库按需下载)
         st: App.Store.state
       };
     },
     computed: {
-      st_stats: function () { return E.stats(); },
+      st_stats: function () { void this.papersRev; return E.stats(); },
       filtered: function () {
+        void this.papersRev;
         return E.list({ grade: this.grade, subject: this.subject, type: this.type, kw: this.kw });
       },
       paged: function () { return E.page(this.filtered, this.pageNo, 12); },
@@ -89,34 +95,55 @@
       }
     },
     watch: {
-      grade: function () { this.pageNo = 1; },
+      grade: function () { this.pageNo = 1; this.loadPaperBank(); },
       subject: function () { this.pageNo = 1; },
       type: function () { this.pageNo = 1; },
       kw: function () { this.pageNo = 1; }
     },
     mounted: function () {
-      if (App.Speech) App.Speech.autoRead("试卷中心，一千零八十套试卷，按年级选一份开始做题吧！");
+      if (App.Speech) App.Speech.autoRead("试卷中心，一万三千多套试卷，按年级选一份开始做题吧！");
+      this.loadPaperBank();       // ★懒加载: 初始只载当前年级卷单片
     },
     methods: {
+      /* ---------- ★卷单/题库按需加载（2026-10-27 分页分片改造） ---------- */
+      loadPaperBank: function () {
+        var self = this;
+        if (!App.Bank || !App.Bank.loadPapers) return;
+        App.Bank.loadPapers(this.grade).then(function () {
+          self.papersRev++;       // 触发 filtered/paged/stats 重算
+        }).catch(function () { });
+      },
       /* ---------- 列表 ---------- */
       typeName: function (ty) { return E.TYPE_NAME[ty] || ty; },
       typeIcon: function (ty) { return E.TYPE_ICON[ty] || "📄"; },
       paperResult: function (id) { return E.results()[id] || null; },
       openPaper: function (p) {
-        var qs = E.loadQuestions(p);
-        if (!qs.length) { alert("这份试卷的题目还没下载好，请刷新再试"); return; }
-        this.paper = p;
-        this.qs = qs;
-        this.idx = 0;
-        this.answers = {};
-        this.sortOrder = {};
-        this.pairSel = {};
-        this.pairMap = {};
-        this.rightOrder = {};
-        this.submitted = false;
-        this.result = null;
-        this.view = "do";
-        this.readCur();
+        /* ★懒加载: 先确保该卷的题库(学科-年级片)就位, 再取题开卷 */
+        var self = this;
+        if (this.loadingPaper) return;
+        this.loadingPaper = true;
+        var go = function () {
+          var qs = E.loadQuestions(p);
+          self.loadingPaper = false;
+          if (!qs.length) { alert("这份试卷的题目还没下载好，请刷新再试"); return; }
+          self.paper = p;
+          self.qs = qs;
+          self.idx = 0;
+          self.answers = {};
+          self.sortOrder = {};
+          self.pairSel = {};
+          self.pairMap = {};
+          self.rightOrder = {};
+          self.locked = {};
+          self.fb = {};
+          self.submitted = false;
+          self.result = null;
+          self.view = "do";
+          self.readCur();
+        };
+        if (App.Bank && App.Bank.ensurePaper) {
+          App.Bank.ensurePaper(p).then(go).catch(function () { self.loadingPaper = false; go(); });
+        } else { go(); }
       },
       back: function () { this.view = "list"; this.paper = null; },
       paperTi: function () { return this.paper ? this.paper.ti : ""; },
@@ -150,9 +177,23 @@
           if (q.t === "pinyin_word" && q.o && q.o.words && q.o.words[0]) {
             st = "看拼音写词语：" + (q.o.words[0].pinyin || []).join(" ");
           }
+          if (st && R.mathZh) st = R.mathZh(st);   // 符号转口语: 14-6=____ → 14减6等于多少
           if (st) list.push({ t: st });
-          var ot = R.optText(R.optsOf(q), false);
-          if (ot) list.push({ t: ot });
+          /* 选项逐段朗读: 每个选项独立一段, 防长句被云端截断、节奏清楚 */
+          var o = R.optsOf(q), ABC = "ABCDEFGHIJ", oi;
+          if (o && o.kind === "pick") {
+            for (oi = 0; oi < o.list.length && oi < 10; oi++) {
+              var ot1 = R.mathZh ? R.mathZh(plainOpt(o.list[oi])) : plainOpt(o.list[oi]);
+              list.push({ t: "选项" + ABC.charAt(oi) + "，" + ot1 });
+            }
+          }
+          else if (o && o.kind === "sort") {
+            for (oi = 0; oi < o.list.length && oi < 10; oi++) list.push({ t: "第" + (oi + 1) + "张，" + o.list[oi] });
+          }
+          else if (o && o.kind === "match") {
+            list.push({ t: "左边有：" + o.left.join("，") });
+            list.push({ t: "右边有：" + o.right.join("，") });
+          }
           else if (q.t === "fill" || q.t === "calculation" || q.t === "short_answer") list.push({ t: "请写出答案。" });
           else if (q.t === "cloze") list.push({ t: "请把空填上。" });
           else if (q.t === "judge") list.push({ t: "请判断对错。" });
@@ -181,7 +222,7 @@
         return a !== undefined && a !== null && a !== "";
       },
       pick: function (i, opt) {
-        if (this.submitted) return;
+        if (this.submitted || this.locked[this.idx]) return;
         var q = this.cur;
         if (q.t === "multiple") {
           var arr = (this.answers[this.idx] || []).slice();
@@ -191,17 +232,23 @@
           this.answers[this.idx] = arr;
         } else {
           this.answers[this.idx] = opt;
+          this.confirmCur();          // 单选/判断: 点完立即判定并讲解
         }
         if (App.Speech && App.Speech.sfx) App.Speech.sfx.pop();
       },
       pickedCls: function (i, opt) {
         var q = this.cur;
-        if (!q) return "";
+        if (!q) return "opt";
         var a = this.answers[this.idx];
-        if (q.t === "multiple") {
-          return (Array.isArray(a) && a.indexOf(opt) >= 0) ? "opt on" : "opt";
+        var on = (q.t === "multiple") ? (Array.isArray(a) && a.indexOf(opt) >= 0) : (a === opt);
+        if (this.locked[this.idx]) {
+          /* 已判定: 正确选项绿框, 我选错的红色, 其它淡出 */
+          var ra = Array.isArray(q.a) ? q.a : [q.a];
+          var isRight = ra.indexOf(i) >= 0;
+          if (isRight) return "opt right";
+          return on ? "opt wrong" : "opt dim";
         }
-        return a === opt ? "opt on" : "opt";
+        return on ? "opt on" : "opt";
       },
       /* 排序：点两次交换 */
       sortClick: function (pos) {
@@ -262,6 +309,98 @@
       ansText: function () {
         var a = this.answers[this.idx];
         return a === undefined || a === null ? "" : String(a);
+      },
+      /* ---------- 即答即判 ---------- */
+      isLocked: function (i) { return !!this.locked[i]; },
+      fbOf: function (i) { return this.fb[i] || null; },
+      curAns: function () {
+        var q = this.cur, i = this.idx;
+        if (!q) return null;
+        if (q.t === "sorting") return this.sortOrder[i] ? this.sortOrder[i].map(function (p) { return q.o[p]; }) : null;
+        if (q.t === "matching") return this.pairMap[i] || null;
+        return this.answers[i];
+      },
+      mineOf: function (q, ans) {
+        if (ans === null || ans === undefined || ans === "") return "（未作答）";
+        if (Array.isArray(ans)) return ans.join("、");
+        if (typeof ans === "object") {
+          var out = [], k;
+          for (k in ans) out.push((q.o && q.o.left ? q.o.left[k] : k) + "→" + ans[k]);
+          return out.join("，");
+        }
+        return String(ans);
+      },
+      rightOf: function (q) {
+        var a = q.a;
+        if (q.t === "single" || q.t === "judge") {
+          return (q.o && q.o[a] !== undefined) ? q.o[a] : String(a);
+        }
+        if (q.t === "multiple") {
+          var out = [], j, aa = Array.isArray(a) ? a : [a];
+          for (j = 0; j < aa.length; j++) out.push(q.o && q.o[aa[j]] !== undefined ? q.o[aa[j]] : aa[j]);
+          return out.join("、");
+        }
+        if (Array.isArray(a)) return String(a[0]).split("|").join(" 或 ");
+        if (a && typeof a === "object") {
+          if (a.reference) return a.reference;
+          var o2 = [], k;
+          for (k in a) o2.push((q.o && q.o.left ? q.o.left[k] : k) + "→" + a[k]);
+          return o2.join("，");
+        }
+        return String(a);
+      },
+      expOf: function (q) {
+        /* 题库自带解析(x字段)优先, 否则按题型生成讲解 */
+        if (q.x) return q.x;
+        var kp = "";
+        try {
+          var bk = App.DATA.exam[this.paper.s + "-" + this.paper.g];
+          if (bk && bk.kps && q.k !== null && q.k !== undefined && bk.kps[q.k] !== undefined) kp = bk.kps[q.k];
+        } catch (e) {}
+        var head = kp ? "这道题考" + kp + "。" : "";
+        switch (q.t) {
+          case "single": {
+            var ai = Array.isArray(q.a) ? q.a[0] : q.a;
+            return head + "正确答案是「" + (q.o && q.o[ai] !== undefined ? q.o[ai] : ai) + "」。";
+          }
+          case "judge": return head + "这句话是「" + (q.o ? q.o[q.a] : (q.a ? "正确" : "错误")) + "」的。";
+          case "multiple": return head + "要把「" + this.rightOf(q) + "」都选上才对。";
+          case "fill": case "cloze": return head + "正确答案是「" + this.rightOf(q) + "」。";
+          case "calculation": return head + "算式「" + q.s + "」的得数是 " + q.a + "。";
+          case "sorting": return head + "正确顺序是：" + (Array.isArray(q.a) ? q.a.join("→") : this.rightOf(q)) + "。";
+          case "matching": return head + "正确连线：" + this.rightOf(q) + "。";
+          case "pinyin_word": {
+            var py = (q.o && q.o.words && q.o.words[0]) ? q.o.words[0].pinyin.join(" ") : "";
+            return head + "这个词语读作「" + py + "」，写作「" + this.rightOf(q) + "」。";
+          }
+          case "short_answer": return head + "参考答案：" + this.rightOf(q) + "。";
+          default: return head + "正确答案是「" + this.rightOf(q) + "」。";
+        }
+      },
+      confirmCur: function () {
+        var q = this.cur, i = this.idx;
+        if (!q || this.locked[i] || this.submitted) return;
+        var ans = this.curAns();
+        if (ans === null || ans === undefined || ans === "" || (Array.isArray(ans) && !ans.length)) {
+          if (App.Speech) App.Speech.speak("先写出答案，再点提交哦");
+          return;
+        }
+        var ok = E.judge(q, ans);
+        var mine = this.mineOf(q, ans), right = this.rightOf(q), exp = this.expOf(q);
+        var fb = {}, lk = {}, k;
+        for (k in this.fb) fb[k] = this.fb[k];
+        for (k in this.locked) lk[k] = this.locked[k];
+        fb[i] = { ok: ok, mine: mine, right: right, exp: exp };
+        lk[i] = 1;
+        this.fb = fb; this.locked = lk;
+        if (App.Speech) {
+          App.Speech.speak(ok ? ("答对了，真棒！" + exp) : ("答错了，没关系。正确答案是" + right + "。" + exp));
+        }
+      },
+      readFb: function () {
+        var f = this.fb[this.idx];
+        if (!f || !App.Speech) return;
+        App.Speech.speak((f.ok ? "这道题你答对了。" : "这道题你答错了，正确答案是" + f.right + "。") + f.exp);
       },
       clozePre: function () { return clozeParts(this.cur ? this.cur.s : "").pre; },
       clozePost: function () { return clozeParts(this.cur ? this.cur.s : "").post; },
@@ -388,8 +527,8 @@
 
       /* 题干 */
       '<div class="ex-qtext" v-if="cur && cur.t !== \'cloze\' && cur.t !== \'pinyin_word\'">{{cur.s}}</div>',
-      '<div class="ex-qtext" v-if="cur && cur.t === \'cloze\'"><span>{{clozePre()}}</span><input class="ex-blank" v-model="answers[idx]"><span>{{clozePost()}}</span></div>',
-      '<div class="ex-qtext ex-py" v-if="cur && cur.t === \'pinyin_word\'"><span class="ex-py-pinyin">{{pyPinyin()}}</span><input class="ex-blank" v-model="answers[idx]" placeholder="写出词语"></div>',
+      '<div class="ex-qtext" v-if="cur && cur.t === \'cloze\'"><span>{{clozePre()}}</span><input class="ex-blank" v-model="answers[idx]" @keyup.enter="confirmCur"><span>{{clozePost()}}</span></div>',
+      '<div class="ex-qtext ex-py" v-if="cur && cur.t === \'pinyin_word\'"><span class="ex-py-pinyin">{{pyPinyin()}}</span><input class="ex-blank" v-model="answers[idx]" @keyup.enter="confirmCur" placeholder="写出词语"></div>',
 
       /* 选择类 */
       '<div class="opts" v-if="cur && (cur.t === \'single\' || cur.t === \'judge\' || cur.t === \'multiple\')">',
@@ -401,7 +540,7 @@
 
       /* 填空/计算/简答 */
       '<div class="ex-input-wrap" v-if="cur && (cur.t === \'fill\' || cur.t === \'calculation\' || cur.t === \'short_answer\')">',
-      '<input class="ex-input" :value="ansText()" @input="setAns($event.target.value)" :placeholder="cur.t === \'calculation\' ? \'写出得数\' : \'写出答案\'">',
+      '<input class="ex-input" :value="ansText()" @input="setAns($event.target.value)" @keyup.enter="confirmCur" :placeholder="cur.t === \'calculation\' ? \'写出得数\' : \'写出答案\'">',
       '</div>',
 
       /* 排序 */
@@ -423,6 +562,20 @@
       '</div>',
       '</div>',
       '<div class="ex-match-now" v-if="pairSel[idx] !== undefined && pairSel[idx] !== null">已选左边「{{cur.o.left[pairSel[idx]]}}」，请点右边</div>',
+      '</div>',
+
+      /* 提交答案按钮(多选/填空/计算/简答/排序/连线; 单选判断点了选项即判) */
+      '<div class="ex-confirm" v-if="cur && !locked[idx] && cur.t !== \'single\' && cur.t !== \'judge\'">',
+      '<button class="btn next" @click="confirmCur">✔ 提交答案</button>',
+      '</div>',
+
+      /* 即时反馈卡: 答完一题立刻给对错+正确答案+原因 */
+      '<div class="ex-fb" v-if="fb[idx]" :class="{ok: fb[idx].ok, bad: !fb[idx].ok}">',
+      '<div class="ex-fb-head">{{fb[idx].ok ? "🎉 答对了，真棒！" : "💪 答错了，别灰心"}}</div>',
+      '<div class="ex-fb-row" v-if="!fb[idx].ok"><span class="ex-fb-lab">你的答案</span><span>{{fb[idx].mine}}</span></div>',
+      '<div class="ex-fb-row"><span class="ex-fb-lab">正确答案</span><span>{{fb[idx].right}}</span></div>',
+      '<div class="ex-fb-exp">💡 {{fb[idx].exp}}</div>',
+      '<div class="ctr"><button class="btn spk" @click="readFb">🔊 再听讲解</button></div>',
       '</div>',
 
       /* 导航 */

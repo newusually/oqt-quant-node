@@ -18,9 +18,10 @@ const { DatabaseSync } = require('node:sqlite');
 const U = require('./universe');
 
 const ROOT = path.resolve(__dirname, '../../../');
-const KLINE_DIR = path.join(ROOT, 'data/okx/kline');
+const KS = require('./kstore');   // ★2026-10-27 月分片存储唯一入口
 const PROGRESS_FILE = path.join(ROOT, 'data/okx/backfill_progress.json');
 const STATE_FILE = path.join(ROOT, 'data/okx/backfill_deep_state.json');
+const STATE_MAIN = path.join(ROOT, 'data/okx/backfill_state.json');   // ★backfill.js 引擎主状态（cursor/floor）
 
 const SPAN = { '3m': 180000, '5m': 300000, '15m': 900000, '30m': 1800000,
   '1h': 3600000, '2h': 7200000, '4h': 14400000, '6h': 21600000, '12h': 43200000,
@@ -36,21 +37,29 @@ function readJson(p) {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; }
 }
 
-function storePath(instId, grain) {
-  return path.join(KLINE_DIR, (instId + '_' + grain).replace(/[^A-Za-z0-9_-]/g, '_') + '.sqlite');
-}
-
-/* 单个合约单个粒度的落库情况 */
+/* 单个合约单个粒度的落库情况（★月分片: 跨片聚合; 完全未迁移才计 legacy 整库,
+ *   迁移中只算月片 —— 月片是 legacy 的子集, 双算会令进度虚高） */
 function statOne(instId, grain) {
-  const sp = storePath(instId, grain);
-  if (!fs.existsSync(sp)) return { have: 0, oldest: 0, newest: 0 };
-  let db = null;
-  try {
-    db = new DatabaseSync(sp, { readOnly: true });
-    const r = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
-    return { have: r.c || 0, oldest: r.mn || 0, newest: r.mx || 0 };
-  } catch (e) { return { have: 0, oldest: 0, newest: 0 }; }
-  finally { try { if (db) db.close(); } catch (e) { } }
+  let have = 0, oldest = 0, newest = 0;
+  const months = KS.monthsOf(grain, instId);
+  for (const ym of months) {
+    const db = KS.roOpen(KS.monthFile(grain, instId, ym));
+    if (!db) continue;
+    try {
+      const r = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
+      if (r && r.c) { have += r.c; if (!oldest || r.mn < oldest) oldest = r.mn; if (r.mx > newest) newest = r.mx; }
+    } catch (e) { }
+  }
+  if (!months.length && KS.hasLegacy(grain, instId)) {
+    const db = KS.roOpen(KS.legacyFile(grain, instId));
+    if (db) {
+      try {
+        const r = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
+        if (r) { have = r.c || 0; oldest = r.mn || 0; newest = r.mx || 0; }
+      } catch (e) { }
+    }
+  }
+  return { have, oldest, newest };
 }
 
 /* ---------------- 全量计算 ---------------- */
@@ -60,9 +69,16 @@ async function build(grain) {
   const prog = readJson(PROGRESS_FILE) || {};
   const state = readJson(STATE_FILE) || {};
   const doneMap = state.done || {};
+  /* ★2026-10-27: floor(数据尽头) 从 backfill.js 引擎主状态读取 ——
+   *   上线不足 90 天的新币 OKX 无更早数据, 必须按"数据尽头"计 100%,
+   *   否则进度条永远差一截、ETA 天文数字（用户: "不知道要几天"） */
+  const floorMap = (readJson(STATE_MAIN) || {}).floor || {};
   const cur = prog.cur || {};
   const g = (prog.grain && prog.grain[grain]) || {};
-  const days = g.days || 730;
+  /* ★2026-10-27: 目标 90 天 → 365 天(尽力一年, 用户: "尽力查询最近一年数据")。
+   *   OKX 实际只保留 ~100 天历史: 老币拉到数据尽头由 floor 标记计 100%,
+   *   新币同理 —— ended 合约显示 100%, coverDays 字段反映实际可得天数。 */
+  const days = g.days || 365;
   const span = SPAN[grain] || 3600000;
   const targetRows = Math.floor(days * DAY / span);
   const now = Date.now();
@@ -79,8 +95,8 @@ async function build(grain) {
     if (c.oldest && (!effOldest || c.oldest < effOldest)) effOldest = c.oldest;
     const coverDays = effOldest ? (now - effOldest) / DAY : 0;
     const have = Math.max(st.have, c.rows || 0);
-    /* 目标：两年；已取到数据尽头(d.end) → 该合约历史已完整, 进度 100% */
-    const ended = !!(d && d.end);
+    /* 目标：90 天；已取到数据尽头(d.end 或引擎 floor 标记) → 该合约历史已完整, 进度 100% */
+    const ended = !!(d && d.end) || !!floorMap['kline:' + key];
     let pct = ended ? 100 : Math.min(100, Math.max(0, coverDays / days * 100));
     if (!ended && effOldest && effOldest <= now - days * DAY) pct = 100;
     const status = pct >= 99.5 ? 'done' : (pct >= 50 ? 'most' : (have > 0 ? 'half' : 'none'));
@@ -94,7 +110,7 @@ async function build(grain) {
     };
   });
 
-  /* ★还差多少根：按该合约已覆盖天数外推总量（上市不足两年的合约不会虚高到两年目标）；
+  /* ★还差多少根：按该合约已覆盖天数外推总量（上市不足一年的合约不会虚高到一年目标）；
    *   完全没数据的合约用「已完成合约的平均总量」估 —— 使 ETA 接近真实耗时 */
   const doneList = rows.filter(r => r.status === 'done' && r.have > 0);
   const avgDone = doneList.length

@@ -20,7 +20,7 @@ const I = require('./universe');
 
 const ROOT = path.resolve(__dirname, '../../../');
 const DB_PATH = path.join(ROOT, 'data/okx/updown.sqlite');
-const KLINE_DIR = path.join(ROOT, 'data/okx/kline');
+const KS = require('./kstore');   // ★2026-10-27 月分片存储唯一入口
 
 /* ---------------- 预计算库 ---------------- */
 let DB = null;
@@ -37,10 +37,6 @@ function db() {
   try { DB.exec('ALTER TABLE updown ADD COLUMN min_inst TEXT'); } catch (e) { }
   DB.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)');
   return DB;
-}
-
-function storePath(instId, grain) {
-  return path.join(KLINE_DIR, (instId + '_' + grain).replace(/[^A-Za-z0-9_-]/g, '_') + '.sqlite');
 }
 
 /* ---------------- 读取：给 updown.js 用 ----------------
@@ -79,14 +75,24 @@ async function build(grain, opt) {
   const t0 = Date.now();
 
   for (const x of list) {
-    const sp = storePath(x.instId, gg);
-    if (!fs.existsSync(sp)) continue;
-    let d = null, rs = null;
-    try {
-      d = new DatabaseSync(sp, { readOnly: true });
-      rs = d.prepare('SELECT ts,c FROM kline ORDER BY ts ASC').all();
-    } catch (e) { if (d) { try { d.close(); } catch (e2) { } } continue; }
-    if (!rs || rs.length < 2) { try { d.close(); } catch (e) { } continue; }
+    /* ★月分片: 读该合约全部月片(升序拼接, 按 ts 去重); 预计算本来就是全表场景 */
+    const chain = KS.readChain(gg, x.instId, 0, 0);
+    if (!chain.length) continue;
+    let rs = [];
+    for (const f of chain) {
+      const d = KS.roOpen(f);
+      if (!d) continue;
+      try { rs = rs.concat(d.prepare('SELECT ts,c FROM kline ORDER BY ts ASC').all()); }
+      catch (e) { }
+    }
+    if (rs.length > 1) {
+      rs.sort((a, b) => a.ts - b.ts);
+      if (chain.length > 1) {
+        const seen = new Set();
+        rs = rs.filter(r => (seen.has(r.ts) ? false : (seen.add(r.ts), true)));
+      }
+    }
+    if (!rs || rs.length < 2) continue;
     cov++; rows += rs.length;
     for (let i = 1; i < rs.length; i++) {
       const prev = rs[i - 1].c, cur = rs[i].c;

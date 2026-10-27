@@ -348,43 +348,33 @@
     if (!b) return null;
     return a ? (a + " " + b) : b;
   }
-  function speakPinyin(py, opt) {
-    py = String(py || "").trim();
-    if (!py) return;
-    var tokens = py.split(/[\s,，、]+/), out = [], i, t, low, c, tone, piece;
+  function pyText(py) {                      /* 拼音→呼读音文本(不发声), 供 seq/字幕复用 */
+    var tokens = String(py || "").trim().split(/[\s,，、]+/), out = [], i, t, low, tone, piece, c;
     for (i = 0; i < tokens.length; i++) {
       t = tokens[i]; if (!t) continue;
-      tone = pyTone(t);
-      low = pyNorm(t);
+      tone = pyTone(t); low = pyNorm(t);
       if (!low) continue;
       if (PY_EXTRA[low]) { out.push(PY_EXTRA[low]); continue; }
-      if (tone) {                                   // 带声调：一定是完整音节 → 读同音汉字
-        piece = sylChar(low, tone);
-        if (piece) { out.push(piece); continue; }
-      }
-      if (PY_INIT[low]) { out.push(PY_INIT[low]); continue; }   // 声母：呼读音 b→波
-      if (PY_WHOLE[low]) { out.push(PY_WHOLE[low]); continue; } // 整体认读：yi→衣
-      if (PY_FIN[low]) { out.push(PY_FIN[low]); continue; }     // 韵母：ang→昂
-      if (!tone) {                                  // 无声调完整音节：ma→妈、ba→爸
-        piece = sylChar(low, 0);
-        if (piece) { out.push(piece); continue; }
-      }
-      if (/^[bpmfdtnlgkhjqxzcsryw]+$/.test(low) && low.length > 1) { // 无声母字母串，如 bpm
+      if (tone) { piece = sylChar(low, tone); if (piece) { out.push(piece); continue; } }
+      if (PY_INIT[low]) { out.push(PY_INIT[low]); continue; }
+      if (PY_WHOLE[low]) { out.push(PY_WHOLE[low]); continue; }
+      if (PY_FIN[low]) { out.push(PY_FIN[low]); continue; }
+      if (!tone) { piece = sylChar(low, 0); if (piece) { out.push(piece); continue; } }
+      if (/^[bpmfdtnlgkhjqxzcsryw]+$/.test(low)) {
         var cs = low.split("");
         for (c = 0; c < cs.length; c++) { if (PY_INIT[cs[c]]) out.push(PY_INIT[cs[c]]); }
         continue;
       }
-      piece = pySyllable(low);                      // 保底拆分
+      piece = pySyllable(low);
       if (piece) { out.push(piece); continue; }
-      if (/^[\u4e00-\u9fa5]/.test(t)) { out.push(t); continue; }  // 汉字原样
-      if (/^[bpmfdtnlgkhjqxzcsryw]+$/.test(low)) {                // 认不出的一串字母：按声母逐个读，绝不读英文
-        var cs2 = low.split("");
-        for (c = 0; c < cs2.length; c++) { if (PY_INIT[cs2[c]]) out.push(PY_INIT[cs2[c]]); }
-        continue;
-      }
       out.push(t);
     }
-    speak(out.join(" "), opt); // 语速交给"声音风格"接管（默认偏慢，适合教学）
+    return out.join(" ");
+  }
+  function speakPinyin(py, opt) {
+    var converted = pyText(py);
+    if (!converted) return;
+    speak(converted, opt);
   }
 
   /* ---------- 朗读时长估算（给动画配节奏用） ----------
@@ -622,6 +612,12 @@
     (function nx() {
       if (i >= segs.length) { done(); return; }
       var seg = segs[i++];
+      /* ★中英混排: 该段若是英文(或含英文且当前是中文嗓音), 自动换英文嗓音; 反之亦然 */
+      var vv = v;
+      try {
+        if (v && v.tl !== "en" && isEnText(seg)) vv = cloudGet("g-en") || v;
+        else if (v && v.tl === "en" && !isEnText(seg)) vv = cloudGet("g-zh") || v;
+      } catch (eL) {}
       var a = cloudAudio();
       if (!a) { done(); return; }
       var over = false, tries = 0;
@@ -632,7 +628,7 @@
       // 联网发音需要用户先点过页面（浏览器自动播放策略）：没点过就隔 0.6 秒重试，直到用户点一下
       function fire() {
         try {
-          a.src = cloudUrl(v, seg);
+          a.src = cloudUrl(vv, seg);
           var p = a.play();
           if (p && p.catch) p.catch(function () {
             cloudFail++;
@@ -852,7 +848,7 @@
     speakLocal: speakLocal,
     speakEn: speakEn,
     speakEnLocal: speakEnLocal,
-    speakPinyin: speakPinyin,
+    speakPinyin: speakPinyin, pyText: pyText,
     seq: seq,
     autoRead: autoRead,
     flushAll: flushAll,

@@ -1,0 +1,20 @@
+/* mviz.css — 数学图形化教学动画 */
+.mviz-box { background: linear-gradient(150deg, #fffdf5, #fff7ec); border: 2px solid #ffe0b2; border-radius: 16px; padding: 10px 6px 6px; margin: 8px 0; }
+.mviz { width: 100%; max-width: 560px; display: block; margin: 0 auto; }
+.mviz .mv-it { opacity: 0; transform: scale(.3); transform-origin: center; animation: mvIn .38s cubic-bezier(.34,1.56,.64,1) forwards; }
+@keyframes mvIn { to { opacity: 1; transform: scale(1); } }
+.mviz .mv-it.mv-b { filter: hue-rotate(120deg) saturate(1.4); }
+.mviz .mv-lb { fill: #6d4c41; font-size: 13px; font-weight: 700; }
+.mviz .mv-lb2 { fill: #00695c; }
+.mviz .mv-brace { stroke: #e53935; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-dasharray: 400; stroke-dashoffset: 400; animation: mvDraw .7s ease-out forwards; animation-delay: .9s; }
+@keyframes mvDraw { to { stroke-dashoffset: 0; } }
+.mviz .mv-q { fill: #e53935; font-size: 26px; font-weight: 800; opacity: 0; animation: mvIn .4s ease forwards; animation-delay: 1.5s; }
+.mviz .mv-strike { stroke: #e53935; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 60; stroke-dashoffset: 60; animation: mvStrike .45s ease-out forwards; }
+@keyframes mvStrike { to { stroke-dashoffset: 0; } }
+.mviz .mv-it + .mv-strike ~ .mv-it { }
+.mviz .mv-grp { fill: none; stroke: #42a5f5; stroke-width: 2; stroke-dasharray: 5 4; rx: 9; opacity: 0; animation: mvIn .4s ease forwards; }
+.mviz .mv-divcut { stroke: #7e57c2; }
+.mviz .mv-tip { fill: #5d4037; font-size: 12.5px; }
+.mviz-alt { padding: 4px 10px 8px; }
+.mv-alt-item { font-size: 13px; color: #4e6e8e; line-height: 1.65; padding-left: 4px; }
+/* 静态被划掉物体淡出效果跟随划线: 通过 CSS 兄弟选择器不可靠, 由 JS 数据属性处理; 此处用划线加深即可 */

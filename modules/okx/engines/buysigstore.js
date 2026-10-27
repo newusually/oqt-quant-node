@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const UD = require('./updown');
+const KS = require('./kstore');   // ★2026-10-27 月分片存储唯一入口
 
 const DB_PATH = path.resolve(__dirname, '../../../data/okx/buysig.sqlite');
 
@@ -92,9 +93,9 @@ async function checkIntegrity() {
     const rows = d.prepare('SELECT MIN(ts) mn, MAX(ts) mx, COUNT(*) n FROM buysig WHERE grain=?').get(g);
     /* 该周期K线库是否齐全（决定能否续算/续补） */
     let storeOk = 0, storeTotal = list.length;
+    /* ★2026-10-27 月分片: 有任一月片(或未迁移 legacy)即视为库齐全 */
     for (const x of list) {
-      const p = UD.storePath(x.instId, g);
-      if (fs.existsSync(p)) storeOk++;
+      if (KS.monthsOf(g, x.instId).length > 0 || KS.hasLegacy(g, x.instId)) storeOk++;
     }
     out[g] = Object.assign({}, rows, { klineStoreOk: storeOk, klineStoreTotal: storeTotal });
   }

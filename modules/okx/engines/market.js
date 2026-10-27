@@ -60,15 +60,19 @@ function okxRank(limit) {
   if (RANK_CACHE && Date.now() - RANK_AT < RANK_TTL) return RANK_CACHE;
   const rows = [];
   try {
-    const dir = path.join(ROOT, 'data/okx/kline');
+    const dir = path.join(ROOT, 'data/okx/kline/5m');   // ★2026-10-27 月分片: {bar}/{inst}/{ym}.sqlite
     if (!fs.existsSync(dir)) return rows;
     const { DatabaseSync } = require('node:sqlite');
-    const files = fs.readdirSync(dir).filter(f => f.endsWith('_5m.sqlite')).slice(0, 600);
-    for (const f of files) {
-      const inst = f.replace('_5m.sqlite', '').replace(/_/g, '-');
+    const instDirs = fs.readdirSync(dir).slice(0, 600);
+    for (const safe of instDirs) {
+      const inst = safe.replace(/_/g, '-');
       let db = null;
       try {
-        db = new DatabaseSync(path.join(dir, f), { readOnly: true });
+        /* 只开该合约最新月片(最后一根一定在里面) */
+        const mdir = path.join(dir, safe);
+        const ms = fs.readdirSync(mdir).filter(x => /^\d{6}\.sqlite$/.test(x)).sort();
+        if (!ms.length) continue;
+        db = new DatabaseSync(path.join(mdir, ms[ms.length - 1]), { readOnly: true });
         const r = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT 2').all();
         if (r.length < 2) continue;
         const last = r[0], prev = r[1];

@@ -46,12 +46,12 @@
       '<div class="hero-side">',
       '<div class="hero-name">{{hero.s}}</div>',
       '<div class="hero-poschip" :class="posCls(hero.pos)">{{hero.pos}}</div>',
-      '<button class="btn spk" @click="readPy(hero.s)">🔊 听读音</button>',
+      '<button class="btn spk" @click="readPy(hero.s, $event)">🔊 听读音</button>',
       '<button class="btn" @click="shuffleWrite">🔀 换一批</button>',
       '</div>',
       '</div>',
       '<div class="sxs-wrap">',
-      '<div class="sxscard" v-for="(c, i) in writeCards" :key="c.s" :class="[posCls(c.pos), {on: hero.s === c.s, reading: readIdx === i}]" @click="pickWrite(c)">',
+      '<div class="sxscard" v-for="(c, i) in writeCards" :key="c.s" :class="[posCls(c.pos), {on: hero.s === c.s, reading: readIdx === i}]" @click="pickWrite(c, $event)">',
       '<div class="sxs" :class="posCls(c.pos)"><span class="sxs-letter">{{c.s}}</span></div>',
       '<div class="sxs-pos">{{c.pos}}</div><div class="sxs-name">{{c.s}}</div>',
       '</div>',
@@ -78,13 +78,13 @@
       '<div class="blend-show">{{blend.q.show}}</div>',
       '<div class="opts"><div class="opt" v-for="(o, i) in blend.q.opts" :key="i" :class="blendCls(i)" @click="answerBlend(i)">{{o}}</div></div>',
       '<div class="gfb" :class="blend.fbCls" v-html="blend.fb"></div>',
-      '<div class="ctr"><button class="btn spk" @click="readPy(blend.q.full)">🔊 听一听</button>',
+      '<div class="ctr"><button class="btn spk" @click="readPy(blend.q.full, $event)">🔊 听一听</button>',
       '<button class="btn next" @click="newBlend">下一题 ▶</button></div>',
       '</div>',
       '<div class="card lpanel" v-show="tab === \'mem\'">',
       '<div class="pz-intro">🧠 用口诀记住拼音长什么样：</div>',
       '<div class="mem-wrap">',
-      '<div class="memcard" v-for="(c, i) in memCards" :key="i" :class="{reading: memIdx === i}" @click="readPy(c.k)">',
+      '<div class="memcard" v-for="(c, i) in memCards" :key="i" :class="{reading: memIdx === i}" @click="readPy(c.k, $event)">',
       '<div class="mem-k">{{c.k}}</div><div class="mem-tip">{{c.tip}}</div></div>',
       '</div>',
       '<div class="ctr"><button class="btn spk" @click="readMemAll">🔊 按顺序读全部</button></div>',
@@ -95,7 +95,7 @@
       '<div class="tone-show">{{tone.q.syl}}</div>',
       '<div class="opts"><div class="opt" v-for="(o, i) in tone.q.opts" :key="i" :class="quizCls(tone, i)" @click="answerQuiz(tone, i)">{{o}}</div></div>',
       '<div class="gfb" :class="tone.fbCls" v-html="tone.fb"></div>',
-      '<div class="ctr"><button class="btn spk" @click="readPy(tone.q.syl)">🔊 听一听</button>',
+      '<div class="ctr"><button class="btn spk" @click="readPy(tone.q.syl, $event)">🔊 听一听</button>',
       '<button class="btn next" @click="newTone">下一题 ▶</button></div>',
       '</div>',
       '<div class="card lpanel" v-show="tab === \'fill\'">',
@@ -145,13 +145,13 @@
       posCls: function (pos) {
         return pos === "上中格" ? "p-upmid" : pos === "中下格" ? "p-middown" : pos === "上中下格" ? "p-all" : "p-mid";
       },
-      pickWrite: function (c) {
+      pickWrite: function (c, ev) {
         this.hero = { s: c.s, pos: c.pos, tip: PZ.MEM[c.s] || "" };
         this.heroN++; this.heroAnim = true;
-        Speech.speakPinyin(c.s, { rate: 0.7 });
+        Speech.speakPinyin(c.s, { rate: 0.7, el: ev && (ev.currentTarget || ev.target) });
       },
       shuffleWrite: function () { this.writeCards = U.shuffled(PZ.writeCards()); },
-      readPy: function (s) { Speech.speakPinyin(s, { rate: 0.7 }); },
+      readPy: function (s, ev) { Speech.speakPinyin(s, { rate: 0.7, el: ev && (ev.currentTarget || ev.target) }); },
       /* ★2026-10-26 用户要求：按顺序读时，先把方框高亮成金黄色+显示边框，再念 */
       readWriteAll: function () {
         var self = this, arr = [];

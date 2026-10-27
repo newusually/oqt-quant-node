@@ -31,3 +31,7 @@ logs/
 
 # WorkBuddy 项目记忆/会话文件
 .workbuddy/
+
+*.bak-*
+*.bak2-*
+*.bak

@@ -1,0 +1,67 @@
+/* 奥数三十六计 */
+.oly-wrap { padding: 14px; max-width: 760px; margin: 0 auto; }
+.oly-hero { font-size: 22px; font-weight: 500; padding: 10px 6px; }
+.oly-sub { display: block; font-size: 12px; color: #8a7a6a; font-weight: 400; margin-top: 3px; }
+.oly-searchbar { display: flex; gap: 8px; margin: 10px 0; }
+.oly-searchbar input { flex: 1; }
+.oly-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.oly-card { background: #fffdf8; border: 1px solid #ead9c0; border-radius: 14px; padding: 14px; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.oly-card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(180,120,40,.14); }
+.oly-card-ic { font-size: 30px; }
+.oly-card-name { font-size: 17px; font-weight: 500; margin: 6px 0 4px; color: #5b3a12; }
+.oly-card-motto { font-size: 12px; color: #9a7d55; line-height: 1.5; min-height: 36px; }
+.oly-card-meta { font-size: 11px; color: #b0977a; margin: 6px 0 8px; }
+.oly-card-btns { display: flex; gap: 6px; }
+.oly-card-btns .btn { flex: 1; font-size: 12px; padding: 6px 4px; }
+
+.oly-back { display: inline-block; padding: 6px 10px; color: #8a6a3a; cursor: pointer; font-size: 13px; }
+.oly-head { display: flex; align-items: center; gap: 8px; padding: 8px 4px; flex-wrap: wrap; }
+.oly-head-ic { font-size: 24px; }
+.oly-head b { font-size: 18px; color: #5b3a12; }
+.oly-head-motto { font-size: 11px; color: #a08860; flex: 1; min-width: 120px; }
+
+.oly-progress { height: 6px; background: #f0e6d6; border-radius: 4px; overflow: hidden; }
+.oly-progress-bar { height: 100%; background: linear-gradient(90deg, #e8a23d, #d97b29); transition: width .3s; }
+.oly-progress-txt { font-size: 11px; color: #a08860; text-align: right; padding: 4px; }
+
+.oly-q { background: #fffdf8; border: 1px solid #ead9c0; border-radius: 16px; padding: 18px; margin-top: 8px; }
+.oly-tags { display: flex; gap: 6px; margin-bottom: 8px; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 8px; }
+.tag.src { background: #fdeeda; color: #9a6b1f; }
+.tag.tp { background: #e8f2fd; color: #2a6aa5; }
+.oly-qtext { font-size: 18px; line-height: 1.7; color: #3a2a12; cursor: pointer; }
+.oly-speak { font-size: 12px; color: #b08968; }
+
+.oly-answer { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
+.oly-input { flex: 1; padding: 10px 12px; border: 1px solid #d8c6a8; border-radius: 10px; font-size: 15px; background: #fff; }
+.oly-verdict { font-size: 14px; font-weight: 500; }
+.oly-verdict.ok { color: #2e7d32; }
+.oly-verdict.no { color: #c62828; }
+
+.oly-btns { display: flex; gap: 10px; margin: 14px 0; }
+.oly-btns .btn { padding: 10px 18px; }
+.oly-btns .btn.big { flex: 1; font-size: 16px; padding: 12px; }
+.oly-btns .btn.ghost { font-size: 13px; }
+.oly-bottom { justify-content: space-between; }
+.oly-btns .btn:disabled { opacity: .35; }
+
+.oly-sol { margin-top: 10px; border-top: 2px dashed #e5d5b8; padding-top: 12px; animation: olyIn .4s ease; }
+@keyframes olyIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.oly-sol-title { font-size: 17px; font-weight: 500; color: #2e7d32; margin-bottom: 10px; }
+.oly-steps { display: flex; flex-direction: column; gap: 10px; }
+.oly-step { background: #faf6ee; border-left: 3px solid #d9a44a; border-radius: 0 10px 10px 0; padding: 10px 12px; }
+.oly-step-f { font-size: 16px; color: #4a2f10; font-weight: 500; letter-spacing: .3px; }
+.oly-step-e { font-size: 12px; color: #9a7d55; margin-top: 3px; }
+
+.oly-alt { margin-top: 12px; }
+.oly-alt-body { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.oly-alt-item { background: #f2f8fd; border-left: 3px solid #6aa5dd; border-radius: 0 10px 10px 0; padding: 10px 12px; }
+.oly-alt-name { font-size: 13px; color: #2a6aa5; font-weight: 500; margin-bottom: 6px; }
+
+.oly-hard { margin-top: 12px; background: #fff8e6; border: 1px solid #f0dca8; border-radius: 12px; padding: 10px 12px; font-size: 13px; color: #7a5c14; }
+.oly-hard b { display: block; margin-bottom: 4px; }
+.oly-bian { margin-top: 8px; background: #eef7ee; border: 1px solid #c8e2c8; border-radius: 12px; padding: 10px 12px; font-size: 13px; color: #2e6b2e; }
+.oly-bian b { display: block; margin-bottom: 4px; }
+
+.oly-theater { margin-top: 6px; }
+.oly-theater .sy-stage { min-height: 420px; }

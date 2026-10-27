@@ -6,10 +6,8 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
 
 const ROOT = path.resolve(__dirname, '../../../');
-const KLINE_DIR = path.join(ROOT, 'data/okx/kline');
 const INST_CACHE = path.join(ROOT, 'data/okx/instruments/instruments.json');
 
 // OKX bar 口径: 库/接口统一用小写键, 接口 bar 用 OKX 要求的大写(H/D/W/M)
@@ -19,58 +17,55 @@ const OKX_BAR = {
   '1d': '1D', '2d': '2D', '3d': '3D', '1w': '1W', '1M': '1M'
 };
 
-function safeName(instId, bar) { return (instId + '_' + bar).replace(/[^A-Za-z0-9_-]/g, '_'); }
-function storePath(instId, bar) { return path.join(KLINE_DIR, safeName(instId, bar) + '.sqlite'); }
+/* ★★2026-10-27 月分片改造（用户: "分时的3分钟5分钟等都要按分时保存数据,
+ *   要分类分月不要全在一个文件避免锁住"）：
+ *   旧布局 data/okx/kline/{inst}_{bar}.sqlite 单文件全历史 —— 保鲜每 2.5 分钟
+ *   写 287 个全历史库, 5m 单库 15MB/全市场 422MB, 历史月数据白白暴露在写锁下。
+ *   新布局 data/okx/kline/{bar}/{inst}/{ym}.sqlite (ym=UTC年月)：
+ *     - 按周期分子目录(分类), 按月分文件(分月) —— 历史月片只读, 只有当月片接收写入;
+ *     - 路径/只读LRU池收敛到 engines/kstore.js（此前 5 个文件各自实现 storePath）。
+ *   迁移: migrate-kline-monthly.js 把旧库按 ym 拆片(零停机, REPLACE 幂等);
+ *   未迁移/迁移中走 legacy 只读 fallback, 迁移完旧库改名 .legacy 自动退出读取链。 */
+const KS = require('./kstore');
 
-function openStore(instId, bar) {
-  fs.mkdirSync(KLINE_DIR, { recursive: true });
-  const db = new DatabaseSync(storePath(instId, bar));
-  db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;');
-  db.exec('CREATE TABLE IF NOT EXISTS kline (' +
-    'ts INTEGER PRIMARY KEY, d TEXT NOT NULL, ym INTEGER NOT NULL, ' +
-    'o REAL, h REAL, l REAL, c REAL, v REAL)');
-  return db;
-}
-
-/* ---------------- ★只读连接池（2026-10-25）
- *   实测：每次 loadLocal 都 open+close 一个 SQLite 文件 → 503 个库 = 29 秒
- *   （open/close 开销远大于 SELECT 本身）。
- *   修法：常驻只读句柄复用，LRU 上限控制。
- *   ★WAL 模式下读写可共存，不会锁住写侧。
- *
- * ★★ 上限从 600 调整为 120（2026-10-25 内存审计）：
- *   每个常驻 DatabaseSync 句柄约占 2MB 堆内存，600 个 → RSS 冲到 1.3GB。
- *   合约总数已从 507 降到 287，且 keepLatest 保鲜只刷新"最近浏览过"的合约，
- *   LRU 120 足以覆盖热区；命中率实测不受影响，内存降约 75%。 */
-const RO_POOL = new Map();        // path → DatabaseSync
-const RO_MAX = 120;
-function roStore(instId, bar) {
-  const sp = storePath(instId, bar);
-  let db = RO_POOL.get(sp);
-  if (db) {                       // LRU：命中后移到末尾
-    RO_POOL.delete(sp); RO_POOL.set(sp, db);
-    return db;
+/* 跨月片统计: COUNT/MIN/MAX 聚合(backfill 收尾/saveRows/前端展示用)。
+ * legacy 只在"完全没有月片"时全量计入, 迁移中只补比月片最旧更早的部分(不双算)。 */
+function statsRows(bar, instId) {
+  let c = 0, mn = 0, mx = 0;
+  const months = KS.monthsOf(bar, instId);
+  for (const ym of months) {
+    const db = KS.roOpen(KS.monthFile(bar, instId, ym));
+    if (!db) continue;
+    try {
+      const s = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
+      if (s && s.c) { c += s.c; if (!mn || s.mn < mn) mn = s.mn; if (s.mx > mx) mx = s.mx; }
+    } catch (e) { }
   }
-  try {
-    db = new DatabaseSync(sp, { readOnly: true });
-    db.exec('PRAGMA busy_timeout=30000;');
-  } catch (e) { return null; }
-  RO_POOL.set(sp, db);
-  while (RO_POOL.size > RO_MAX) {   // 淘汰最久未用
-    const oldest = RO_POOL.keys().next().value;
-    const od = RO_POOL.get(oldest);
-    RO_POOL.delete(oldest);
-    try { if (od) od.close(); } catch (e) { }
+  if (KS.hasLegacy(bar, instId)) {
+    const db = KS.roOpen(KS.legacyFile(bar, instId));
+    if (db) {
+      try {
+        let s;
+        if (!months.length) s = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get();
+        else if (mn) s = db.prepare('SELECT COUNT(*) c, MIN(ts) mn FROM kline WHERE ts < ?').get(mn);
+        if (s && s.c) { c += s.c; if (!mn || s.mn < mn) mn = s.mn; }
+      } catch (e) { }
+    }
   }
-  return db;
+  return { c, mn, mx };
 }
 
 const CANDLES_API = 'https://www.okx.com/api/v5/market/history-candles';
 const INST_API = 'https://www.okx.com/api/v5/public/instruments?instType=SWAP';
 const TF = require('./universe');   // ★合约生态分类映射（公链/扩容/DeFi/Meme/AI/基础设施/链游/实物资产/其他）
+const GATE = require('./okxgate');  // ★2026-10-27 全局限流协调（保鲜+回填共享一个桶, 彻底消除互挤）
 
 // ---------------------------------------------------------------------------
-// 拉取: OKX history-candles 降序返回, after 翻更早; 限流 20req/2s → 每请求 sleep 0.13s
+// 拉取: OKX history-candles 降序返回, after 翻更早
+// ★2026-10-27 限流修复: 原版遇 50011 直接 break(=失败), 保鲜一轮 186 失败;
+//   且与回填并发时 36req/s ≫ 20req/2s 互挤全灭。
+//   现版: 请求前走全局 gate 节流; 限流 → 全局暂停 + 本页重试(最多4次);
+//   分页间隔由 gate 统一管理, 不再单独 sleep。
 // ---------------------------------------------------------------------------
 async function fetchCandles(instId, bar, pages, afterTs) {
   const out = new Map();
@@ -78,16 +73,25 @@ async function fetchCandles(instId, bar, pages, afterTs) {
   for (let p = 0; p < (pages || 2); p++) {
     let url = CANDLES_API + '?instId=' + encodeURIComponent(instId) + '&bar=' + (OKX_BAR[bar] || bar) + '&limit=100';
     if (after) url += '&after=' + after;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
-    let data;
-    try {
-      const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const j = await res.json();
-      if (!j || j.code !== '0' || !Array.isArray(j.data)) break;
-      data = j.data;
-    } catch (e) { break; } finally { clearTimeout(timer); }
-    if (!data.length) break;
+    let data = null;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      let j = null;
+      try {
+        await GATE.wait();
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 20000);
+        try {
+          const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          j = await res.json();
+        } finally { clearTimeout(timer); }
+      } catch (e) { j = null; }
+      if (j && j.code === '0' && Array.isArray(j.data)) { data = j.data; break; }
+      const rl = j && (j.code === '50011' || j.code === '50013');
+      if (rl) GATE.punish(6000);          // 限流 → 全局一起退避
+      if (!rl && attempt >= 1) break;     // 非限流错误最多重试 1 次
+      if (attempt >= 3) break;
+    }
+    if (!data || !data.length) break;
     let oldest = null;
     for (const row of data) {
       const ts = parseInt(row[0], 10);
@@ -96,7 +100,6 @@ async function fetchCandles(instId, bar, pages, afterTs) {
       out.set(ts, { ts, o: +row[1], h: +row[2], l: +row[3], c: +row[4], v: +row[5] });
     }
     after = oldest;
-    await new Promise(r => setTimeout(r, 130));
   }
   return [...out.values()].sort((a, b) => a.ts - b.ts);
 }
@@ -147,7 +150,9 @@ async function keepAllMarket(instIds, bar) {
         await pull(id, barN, 1);
         n++;
       } catch (e) { fail++; }
-      await new Promise(r => setTimeout(r, 130));   // OKX 限流 20req/2s
+      /* ★2026-10-27: 节流已由 GATE 全局统一(150ms/req), 这里不再重复 sleep,
+       *   原双重节流(130ms + gate)会把保鲜一轮拖到 6 分钟且仍可能挤兑 */
+      await new Promise(r => setTimeout(r, 20));   // 仅让出事件循环
     }
   } finally { allKeepRunning = false; }
   return { ok: true, got: n, fail, at: Date.now() };
@@ -206,96 +211,181 @@ async function pullBefore(instId, bar, beforeTs, pages) {
 //     {limit: 1000}      → 一直往前翻, 直到本地总数 >= limit 根（或翻完）
 //     {untilTs}          → 翻到该时间戳为止
 //   旧接口 years 保留兼容（内部换算成 days）
+//
+// ★2026-10-27 提速改造（用户: "okx 补全数据太慢了 帮我加速 这么慢不知道要几天"）：
+//   旧版三大慢点 ——
+//     a) 单页 limit=100 根（history-candles 实测上限 300, 白白多 3 倍请求）
+//     b) 首页从【最新】开始翻 —— 本地已有的数据全部重复拉一遍才走到缺口
+//     c) 独立 sleep 130ms + GATE 150ms 双重限流 ≈ 280ms/页, 实际 ~3.5req/s
+//   新版 ——
+//     a) 单页 300 根
+//     b) 翻页起点 = 本地最老一根(statsRows.mn), 直接从缺口处接力, 零重复
+//     c) 节流全交 GATE(105ms ≈ 9.5req/s), 已覆盖目标的合约 0 请求秒回
+//   效果: 点一次"补90天" = 5m 87页 ≈ 12s / 3m 144页 ≈ 20s（旧版要点 8+ 次且永远差一点）
+//
+// ★2026-10-27 二期（用户: "尽力查询最近一年数据 如果真的是新币就查询最远的数据返回就行 不要超过边界"）：
+//   - days 可传 365(一年): 翻到 OKX 数据尽头自然停止(返回空/不足300根), 绝不越界
+//   - 接入 floor"数据尽头"标记(与 backfill.js 引擎共享 STATE):
+//       拉到尽头仍未覆盖目标天数 → floor[ck]=1, 之后每次点击 0 请求秒回
+//   - maxRounds 上限 300→800 页(800×300=24万根≈833天 > 365天, 兜底)
 async function backfill(instId, bar, opt) {
   opt = (opt && typeof opt === 'object') ? opt : { years: opt };
   const days = (opt.days !== null && opt.days !== undefined) ? +opt.days : (opt.years ? Math.round(+opt.years * 365) : null);
   const limit = (opt.limit !== null && opt.limit !== undefined) ? parseInt(opt.limit, 10) : 0;
   const untilTs = opt.untilTs || 0;
-  const maxRounds = Math.max(1, Math.min(parseInt(opt.rounds || 40, 10) || 40, 300));
+  const maxRounds = Math.max(1, Math.min(parseInt(opt.rounds || 40, 10) || 40, 800));
+  const target = (days !== null && days !== undefined) ? Date.now() - days * 86400000 : 0;
+  /* ★floor 共享状态(backfill.js 的 STATE_FILE, 顶层 require 安全:
+   *   backfill.js 顶层不依赖 kline, 它在 klineDeep 函数内才反向 require 本模块) */
+  const BF = require('./backfill');
+  const ck = 'kline:' + bar + ':' + instId;
 
-  let added = 0, after = null, done = false, oldest = 0;
+  /* 起点接力: 从本地最老一根继续往前翻(0 根则从最新翻起) */
+  let after = statsRows(bar, instId).mn || null;
+  /* 前置短路: 已覆盖目标天数 或 已知数据尽头 → 0 请求秒回 */
+  if ((after && target && after <= target) || BF.state().floor[ck]) {
+    const stats = statsRows(bar, instId);
+    return { ok: true, inst: instId, bar, added: 0, rounds: 0, done: true, total: stats.c, oldest: stats.mn, newest: stats.mx };
+  }
+
+  let added = 0, done = false, oldest = 0;
   for (let r = 0; r < maxRounds; r++) {
     // ★每次翻页前先看本地已有多少根 —— limit 模式到量就停（移动K线回补1000根）
     if (limit > 0) {
       const cur = localCount(instId, bar);
       if (cur >= limit) { done = true; break; }
     }
-    const rows = await fetchCandles(instId, bar, 1, after);
-    if (!rows.length) { done = true; break; }
+    const rows = await historyPage(instId, bar, after);
+    if (!rows.length) { done = true; break; }              // OKX 无更早数据 = 数据尽头
     const sv = await saveRows(instId, bar, rows);
     added += sv.added;
     const o = rows[0].ts;
     if (!oldest) oldest = o;
     if (untilTs && o <= untilTs) { done = true; break; }   // 已覆盖到目标时间
-    if ((days !== null && days !== undefined) && o <= Date.now() - days * 86400000) { done = true; break; }  // 已回填够 N 天
-    if (after && o >= after) { done = true; break; }     // 没有更早的数据
+    if (target && o <= target) { done = true; break; }     // 已回填够 N 天
+    if (after && o >= after) { done = true; break; }       // 没有更早的数据
     after = o;
-    if (rows.length < 100) { done = true; break; }        // 最后一页
-    await new Promise(r => setTimeout(r, 130));            // 限流
+    if (rows.length < 300) { done = true; break; }         // 最后一页(单页上限300)
   }
-  const db = openStore(instId, bar);
-  let stats = null;
-  try { stats = db.prepare('SELECT COUNT(*) c, MIN(ts) mn, MAX(ts) mx FROM kline').get(); }
-  finally { db.close(); }
+  /* ★数据尽头打标: 自然到底(非 limit/untilTs 截断)且仍未覆盖目标天数 → floor,
+   *   之后本函数与后台引擎共用短路, 不越界不重拉。 */
+  if (done && limit <= 0 && !untilTs) {
+    const finalTs = statsRows(bar, instId).mn;
+    if (finalTs > 0 && target && finalTs > target) BF.state().floor[ck] = 1;
+  }
+  /* ★月分片: 统计不再开整库, 直接跨片聚合 */
+  const stats = statsRows(bar, instId);
   return {
     ok: true, inst: instId, bar, added, rounds: maxRounds, done,
-    total: stats ? stats.c : 0, oldest: stats ? stats.mn : 0, newest: stats ? stats.mx : 0
+    total: stats.c, oldest: stats.mn, newest: stats.mx
   };
 }
 
-// 落库 + 统计
+/* ★2026-10-27 history-candles 单页拉取（300 根/页, GATE 统一节流 + 限流重试）
+ *   供 backfill() 深翻历史用; fetchCandles(limit=100) 保留给保鲜/pull 近端场景。 */
+async function historyPage(instId, bar, after) {
+  let url = CANDLES_API + '?instId=' + encodeURIComponent(instId) +
+    '&bar=' + (OKX_BAR[bar] || bar) + '&limit=300';
+  if (after) url += '&after=' + after;
+  for (let attempt = 0; attempt <= 3; attempt++) {
+    let j = null;
+    try {
+      await GATE.wait();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        j = await res.json();
+      } finally { clearTimeout(timer); }
+    } catch (e) { j = null; }
+    if (j && j.code === '0' && Array.isArray(j.data)) {
+      return j.data.map(row => ({ ts: parseInt(row[0], 10), o: +row[1], h: +row[2], l: +row[3], c: +row[4], v: +row[5] }))
+        .filter(r => isFinite(r.ts) && r.ts > 0).sort((a, b) => a.ts - b.ts);
+    }
+    const rl = j && (j.code === '50011' || j.code === '50013');
+    if (rl) GATE.punish(6000);          // 限流 → 全局一起退避
+    if (!rl && attempt >= 1) break;     // 非限流错误最多重试 1 次
+  }
+  return [];
+}
+
+// 落库 + 统计（★2026-10-27 月分片版）
 async function saveRows(instId, bar, rows) {
   if (!rows.length) return { ok: true, inst: instId, bar, added: 0, total: 0, empty: true };
-  const db = openStore(instId, bar);
-  const ins = db.prepare('INSERT OR REPLACE INTO kline (ts,d,ym,o,h,l,c,v) VALUES (?,?,?,?,?,?,?,?)');
-  const get = db.prepare('SELECT ts FROM kline WHERE ts=?');
-  let added = 0;
+  /* ★按 ym 分组, 各组只写自己的 {bar}/{inst}/{ym}.sqlite 月片
+   *   —— 历史月片完全不触碰, 写锁窗口 = 当月片一次事务。
+   *   事务规范(★node:sqlite 无 .transaction(), 必须手动 BEGIN/COMMIT/ROLLBACK,
+   *   此前误用 better-sqlite3 API 抛 "is not a function" 的教训见 git log)。 */
+  const groups = new Map();   // ym → rows[]
   for (const r of rows) {
-    const ex = get.get(r.ts);
     const pp = tsParts(r.ts);
-    ins.run(r.ts, pp.d, pp.ym, r.o, r.h, r.l, r.c, r.v);
-    if (!ex) added++;
+    if (!groups.has(pp.ym)) groups.set(pp.ym, []);
+    groups.get(pp.ym).push({ ts: r.ts, d: pp.d, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v });
   }
-  const total = db.prepare('SELECT COUNT(*) c FROM kline').get().c;
-  db.close();
-  return { ok: true, inst: instId, bar, added, total, last_ts: rows[rows.length - 1].ts };
+  let added = 0, lastTs = 0;
+  for (const [ym, g] of groups) {
+    const db = KS.openMonth(bar, instId, ym);
+    const ins = db.prepare('INSERT OR REPLACE INTO kline (ts,d,ym,o,h,l,c,v) VALUES (?,?,?,?,?,?,?,?)');
+    const totalBefore = db.prepare('SELECT COUNT(*) c FROM kline').get().c;
+    db.exec('BEGIN');
+    try {
+      for (const r of g) ins.run(r.ts, r.d, ym, r.o, r.h, r.l, r.c, r.v);
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) { }
+      db.close();
+      throw e;
+    }
+    const totalAfter = db.prepare('SELECT COUNT(*) c FROM kline').get().c;
+    added += totalAfter - totalBefore;
+    db.close();
+    for (const r of g) if (r.ts > lastTs) lastTs = r.ts;
+  }
+  const total = statsRows(bar, instId).c;   // 跨片总根数(前端进度展示语义不变)
+  return { ok: true, inst: instId, bar, added, total, last_ts: lastTs };
 }
 
 function loadLocal(instId, bar, limit, beforeTs) {
-  const sp = storePath(instId, bar);
-  if (!fs.existsSync(sp)) return [];
-  // ★用常驻只读句柄（避免每次 open/close，实测 503 库 29s → 大幅下降）
-  const db = roStore(instId, bar);
-  if (!db) return [];
-  let rows;
+  /* ★月分片读取: 从最新片往旧逐片读, 凑够 limit 即停;
+   *   beforeTs 从该 ts 所在月开始; legacy 未迁移库自动并入读取链(按 ts 去重)。 */
+  const files = KS.readChain(bar, instId, beforeTs || 0, limit || 0);
+  if (!files.length) return [];
+  let rows = [];
   try {
-    // beforeTs: 只取该时间戳之前的K线（悬浮迷你窗按信号时间定位用）
-    if (beforeTs) {
-      // ★同样要 LIMIT —— 否则单合约全表读（1h 库可达 2000+ 根 × 287 合约）
-      if (limit && limit > 0) {
-        rows = db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts DESC LIMIT ?')
-          .all(beforeTs, limit).reverse();
+    for (const f of files) {
+      const db = KS.roOpen(f);              // 常驻只读句柄(LRU), 避免 3000+ 库反复 open/close
+      if (!db) continue;
+      let part;
+      if (beforeTs && files.length === 1) {
+        // 单文件(未迁移 legacy 或单月片): 走原索引查询
+        part = (limit && limit > 0)
+          ? db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts DESC LIMIT ?').all(beforeTs, limit)
+          : db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts ASC').all(beforeTs);
+      } else if (limit && limit > 0) {
+        part = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts DESC LIMIT ?').all(limit);
+      } else if (beforeTs) {
+        part = db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts ASC').all(beforeTs);
       } else {
-        rows = db.prepare('SELECT ts,o,h,l,c,v FROM kline WHERE ts <= ? ORDER BY ts ASC').all(beforeTs);
+        part = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts ASC').all();
       }
-    } else if (limit && limit > 0) {
-      // ★性能: 只要最近 N 根就别全表 SELECT —— ORDER BY ts DESC LIMIT N 再反序
-      rows = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts DESC LIMIT ?').all(limit).reverse();
-    } else {
-      rows = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts ASC').all();
+      rows = rows.concat(part);
+      if (limit && rows.length >= limit) break;
+    }
+  } catch (e) { return []; }
+  if (rows.length > 1) {
+    rows.sort((a, b) => a.ts - b.ts);
+    if (files.length > 1) {                  // 跨片(legacy+月片并存)去重
+      const seen = new Set();
+      rows = rows.filter(r => (seen.has(r.ts) ? false : (seen.add(r.ts), true)));
     }
   }
-  catch (e) { return []; }
   let arr = rows.map(r => ({ t: r.ts, o: r.o, h: r.h, l: r.l, c: r.c, v: r.v }));
   if (limit && arr.length > limit) arr = arr.slice(arr.length - limit);
   return arr;
 }
 
 function localCount(instId, bar) {
-  const sp = storePath(instId, bar);
-  if (!fs.existsSync(sp)) return 0;
-  const db = new DatabaseSync(sp);
-  try { return db.prepare('SELECT COUNT(*) c FROM kline').get().c; } finally { db.close(); }
+  return statsRows(bar, instId).c;
 }
 
 // ---------------------------------------------------------------------------

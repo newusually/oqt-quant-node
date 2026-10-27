@@ -18,7 +18,7 @@
       '<div class="card lpanel" v-show="tab === \'letter\'">',
       '<div class="ez-intro">🔤 点字母卡片，听一听它的发音和例词：</div>',
       '<div class="letter-wrap">',
-      '<div class="letter-card" v-for="(L, i) in letters" :key="i" @click="readLetter(i)">',
+      '<div class="letter-card" v-for="(L, i) in letters" :key="i" @click="readLetter(i, $event)">',
       '<div class="lc-up">{{L.up}}</div><div class="lc-low">{{L.low}}</div>',
       '<div class="lc-img" v-if="L.img" v-html="svg(L.img)"></div>',
       '<div class="lc-img lc-noimg" v-else>{{L.word}}</div>',
@@ -29,7 +29,7 @@
       '<div class="card lpanel" v-show="tab === \'vocab\'">',
       '<div class="ez-intro">📚 点单词卡，听一听、看一看意思：</div>',
       '<div class="vocab-wrap">',
-      '<div class="vocab-card" v-for="(v, i) in vocab" :key="i" @click="readVocab(i)">',
+      '<div class="vocab-card" v-for="(v, i) in vocab" :key="i" @click="readVocab(i, $event)">',
       '<div class="vc-img" v-if="v.img" v-html="svg(v.img)"></div>',
       '<div class="vc-img vc-noimg" v-else>{{v.en}}</div>',
       '<div class="vc-en">{{v.en}}</div><div class="vc-zh">{{v.open ? v.zh : "？"}}</div></div>',
@@ -109,7 +109,7 @@
       '<div class="card lpanel" v-show="tab === \'phonics\'">',
       '<div class="ez-intro">🔤 自然拼读：字母和组合怎么读，点卡片听发音：</div>',
       '<div class="ph-wrap">',
-      '<div class="ph-card" v-for="(p, i) in phonicsList" :key="i" @click="readPhonics(p)">',
+      '<div class="ph-card" v-for="(p, i) in phonicsList" :key="i" @click="readPhonics(p, $event)">',
       '<div class="ph-t">{{p.t}}</div><div class="ph-s">{{p.s}}</div>',
       '<div class="ph-w">{{p.w.join(" · ")}}</div></div>',
       '</div>',
@@ -121,7 +121,7 @@
       '<button class="btn spk" @click="dictSearch">🔍 搜索</button>',
       '<button class="btn" v-if="dkw" @click="dkw = \'\'">✕ 清除</button></div>',
       '<div class="dict-wrap">',
-      '<div class="dict-card" v-for="(d, i) in dictShow" :key="i" @click="readEn(d.en, 0.8)">',
+      '<div class="dict-card" v-for="(d, i) in dictShow" :key="i" @click="readEn(d.en, 0.8, $event)">',
       '<b>{{d.en}}</b><span class="d-ph">{{d.ph}}</span><span class="d-cn">{{d.cn}}</span>',
       '<span class="d-tag" v-if="d.g">一年级</span><span class="d-tag2" v-if="d.tag">{{d.tag}}</span></div>',
       '</div>',
@@ -193,20 +193,20 @@
     },
     methods: {
       svg: function (id) { return IMG.svg(id) || ""; },
-      readEn: function (t, r) { Speech.speakEn(t, { rate: r || 0.85 }); },
-      readLetter: function (i) {
+      readEn: function (t, r, ev) { Speech.speakEn(t, { rate: r || 0.85, el: ev && (ev.currentTarget || ev.target) }); },
+      readLetter: function (i, ev) {
         var L = this.letters[i];
-        Speech.speakEn(L.low, { rate: 0.8 });
+        Speech.speakEn(L.low, { rate: 0.8, el: ev && (ev.currentTarget || ev.target) });
         var self = this;
         setTimeout(function () { Speech.speakEn(L.word, { rate: 0.8 }); }, 700);
       },
       readLetterAll: function () {
         Speech.seq(this.letters.map(function (L) { return { t: L.low, en: true }; }));
       },
-      readVocab: function (i) {
+      readVocab: function (i, ev) {
         var v = this.vocab[i];
         v.open = true;
-        Speech.speakEn(v.en, { rate: 0.85 });
+        Speech.speakEn(v.en, { rate: 0.85, el: ev && (ev.currentTarget || ev.target) });
       },
       readVocabAll: function () {
         var self = this;
@@ -247,8 +247,8 @@
         if (App.ReadQ) App.ReadQ.readText(t, os, { en: true, force: true });
         else if (t) App.Speech.speakEn(t, { rate: 0.85 });
       },
-      readPhonics: function (p) {
-        Speech.speak(p.t + "，" + p.s);
+      readPhonics: function (p, ev) {
+        Speech.speak(p.t + "，" + p.s, { el: ev && (ev.currentTarget || ev.target) });
         var self = this;
         setTimeout(function () { Speech.speakEn(p.w.join(", "), { rate: 0.75 }); }, 900);
       },

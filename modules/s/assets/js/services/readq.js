@@ -18,15 +18,31 @@
   }
   function arr(v) { return Object.prototype.toString.call(v) === "[object Array]" ? v : null; }
 
-  /* 算式转口语：3+2=5 → "3 加 2 等于 5"，否则会被读成"三加二等于五"里的符号读不出来 */
-  var OPS = { "+": "加", "-": "减", "×": "乘", "*": "乘", "÷": "除以", "/": "除以" };
+  /* 算式转口语：3+2=5 → "3 加 2 等于 5"，否则会被读成"三加二等于五"里的符号读不出来
+   * 符号读法规范(全站统一): +加 -减 ×乘 ÷除以 =等于 <小于 >大于 ≤小于等于 ≥大于等于
+   * 填空: ____ /＿＿ /（ ） / ( ) → "多少"; ? / ？ → "几"; 全角符号一律兼容 */
+  var OPS = { "+": "加", "-": "减", "－": "减", "—": "减",
+              "×": "乘", "*": "乘", "x": "乘", "X": "乘",
+              "÷": "除以", "/": "除以", "∶": "比" };
   function mathZh(s) {
     var t = String((s === null || s === undefined) ? "" : s);
-    t = t.replace(/(\d)\s*([+\-*×÷\/])\s*(\d)/g, function (m, a, op, b) {
+    /* 填空先处理: 连续下划线/空括号 → 多少(放最前, 避免下划线干扰算式识别) */
+    t = t.replace(/_{2,}/g, "多少").replace(/＿{1,}/g, "多少").replace(/_+/g, "多少");
+    t = t.replace(/（\s*）/g, "多少").replace(/\(\s*\)/g, "多少");
+    t = t.replace(/\b___\b/g, "多少").replace(/□+/g, "多少");
+    /* 算式: 数字 运算符 数字 (含全角－、字母x当乘号) */
+    t = t.replace(/(\d)\s*([+\-*×÷\/－—])\s*(\d)/g, function (m, a, op, b) {
       return a + " " + (OPS[op] || op) + " " + b;
     });
-    t = t.replace(/\s*=\s*/g, "等于");
-    t = t.replace(/\s*\?\s*$/, "几？");
+    t = t.replace(/(\d)\s*[xX]\s*(\d)/g, function (m, a, b) { return a + " 乘 " + b; });
+    /* 比较符号: 任意两边内容, 符号单独替换 */
+    t = t.replace(/\s*<=\s*/g, "小于等于").replace(/\s*>=\s*/g, "大于等于");
+    t = t.replace(/\s*≤\s*/g, "小于等于").replace(/\s*≥\s*/g, "大于等于");
+    t = t.replace(/\s*<\s*/g, " 小于 ").replace(/\s*>\s*/g, " 大于 ");
+    t = t.replace(/\s*=\s*/g, " 等于 ").replace(/＝/g, " 等于 ");
+    t = t.replace(/？/g, "?");               /* 全角问号先归一, 末尾统一只补一次 */
+    t = t.replace(/\s*\?\s*$/g, "几？");
+    t = t.replace(/\s*∶\s*/g, "比").replace(/\s*:\s*(?=\s|$)/g, "比");
     return t.replace(/\s+/g, " ").trim();
   }
 
@@ -130,6 +146,7 @@
     stem: stem,
     optsOf: optsOf,
     optText: optText,
+    mathZh: mathZh,
     read: read,
     readEn: readEn,
     readText: readText
