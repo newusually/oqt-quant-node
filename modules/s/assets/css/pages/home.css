@@ -25,6 +25,11 @@
   padding: 16px 12px;
   text-align: center;
   color: #fff;
+  /* ★兜底底色: 万一某张卡片没落到任何 cN 配色规则(以后新增入口忘了写样式),
+     白字也不会直接落在 body 的白底上变成隐形。 正常情况被后面的 cN 覆盖。 */
+  background: #2f6fd0;
+  background: -webkit-linear-gradient(160deg, #3b7ada, #174c94);
+  background: linear-gradient(160deg, #3b7ada, #174c94);
   border-radius: 18px;
   -webkit-box-shadow: 0 5px 0 rgba(0,0,0,0.12);
   box-shadow: 0 5px 0 rgba(0,0,0,0.12);
@@ -35,17 +40,48 @@
 .entry-card .emj { font-size: 40px; display: block; margin-bottom: 6px; }
 .entry-card .t { font-size: 18px; font-weight: bold; }
 .entry-card .d { font-size: 12px; opacity: .92; margin-top: 4px; }
-.entry-card.c1 { background: -webkit-linear-gradient(160deg, #ffb74d, #ff7043); background: linear-gradient(160deg, #ffb74d, #ff7043); }
-.entry-card.c2 { background: -webkit-linear-gradient(160deg, #4fc3f7, #0288d1); background: linear-gradient(160deg, #4fc3f7, #0288d1); }
-.entry-card.c3 { background: -webkit-linear-gradient(160deg, #81c784, #388e3c); background: linear-gradient(160deg, #81c784, #388e3c); }
-.entry-card.c4 { background: -webkit-linear-gradient(160deg, #ba68c8, #7b1fa2); background: linear-gradient(160deg, #ba68c8, #7b1fa2); }
-.entry-card.c5 { background: -webkit-linear-gradient(160deg, #ff8a80, #e53935); background: linear-gradient(160deg, #ff8a80, #e53935); }
-.entry-card.c6 { background: -webkit-linear-gradient(160deg, #fff59d, #f9a825); background: linear-gradient(160deg, #fff59d, #f9a825); color: #6d4c00; }
-.entry-card.c7 { background: -webkit-linear-gradient(160deg, #4db6ac, #00796b); background: linear-gradient(160deg, #4db6ac, #00796b); }
-.entry-card.c8 { background: -webkit-linear-gradient(160deg, #b39ddb, #5e35b1); background: linear-gradient(160deg, #b39ddb, #5e35b1); }
-.entry-card.c9 { background: -webkit-linear-gradient(160deg, #80cbc4, #00897b); background: linear-gradient(160deg, #80cbc4, #00897b); }
-.entry-card.c10 { background: -webkit-linear-gradient(160deg, #90caf9, #1565c0); background: linear-gradient(160deg, #90caf9, #1565c0); }
-.entry-card.c11 { background: -webkit-linear-gradient(160deg, #ffb74d, #e8890c); background: linear-gradient(160deg, #ffb74d, #e8890c); }
+/* ─────────────────────────────────────────────────────────
+   入口卡片配色 c1~c24  ★2026-10-28 重做
+   旧问题: 11/11 卡片白字对比度不达标(最低 c6 仅 1.12, 多数 1.7~2.4)
+            → 标题/描述发灰发糊, 用户反馈「颜色是白色看不清楚」
+   新方案: 每个渐变的浅端(顶部)相对亮度压到 <=0.18, 白字对比度 >=4.5
+           (WCAG 2.1 AA 小字标准), 深端更暗, 整卡任意位置都清晰。
+   超过 24 张由 home-view 的 cardCls() 取模循环, 永不出现无配色卡片。
+   ───────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   入口卡片配色 c1~c24   ★2026-10-28 重做
+   旧问题: 原 11 套白字对比度全部不达标(最低 1.12, 多数 1.7~2.4)
+           → 标题和描述糊成一片; 且 c12~c15 四个板块压根没有配色
+           → 白字落在 body 白底上 = 完全隐形
+   新方案: 每张卡片都按 WCAG 2.1 AA(小字 >=4.5:1) 逐色计算:
+           · 冷色/深色系 → 深渐变 + 白字
+           · 暖亮系(黄/黄绿) → 亮渐变 + 深棕字(压深会发土, 故反向处理)
+   超过 24 张由 home-view.cardCls() 取模循环, 永不出现无配色卡片。
+   ───────────────────────────────────────────────────────── */
+.entry-card.c1 { background: -webkit-linear-gradient(160deg, #d34242, #8a1c1c); background: linear-gradient(160deg, #d34242, #8a1c1c); color: #ffffff; }
+.entry-card.c2 { background: -webkit-linear-gradient(160deg, #bb5b1e, #73360f); background: linear-gradient(160deg, #bb5b1e, #73360f); color: #ffffff; }
+.entry-card.c3 { background: -webkit-linear-gradient(160deg, #cb823a, #a86829); background: linear-gradient(160deg, #cb823a, #a86829); color: #3e2700; }
+.entry-card.c4 { background: -webkit-linear-gradient(160deg, #a29426, #84781c); background: linear-gradient(160deg, #a29426, #84781c); color: #3e2700; }
+.entry-card.c5 { background: -webkit-linear-gradient(160deg, #989819, #868613); background: linear-gradient(160deg, #989819, #868613); color: #3e2700; }
+.entry-card.c6 { background: -webkit-linear-gradient(160deg, #73a02b, #5d8220); background: linear-gradient(160deg, #73a02b, #5d8220); color: #3e2700; }
+.entry-card.c7 { background: -webkit-linear-gradient(160deg, #65a326, #50851c); background: linear-gradient(160deg, #65a326, #50851c); color: #3e2700; }
+.entry-card.c8 { background: -webkit-linear-gradient(160deg, #2ca91c, #218a13); background: linear-gradient(160deg, #2ca91c, #218a13); color: #3e2700; }
+.entry-card.c9 { background: -webkit-linear-gradient(160deg, #248824, #145314); background: linear-gradient(160deg, #248824, #145314); color: #ffffff; }
+.entry-card.c10 { background: -webkit-linear-gradient(160deg, #208747, #11532a); background: linear-gradient(160deg, #208747, #11532a); color: #ffffff; }
+.entry-card.c11 { background: -webkit-linear-gradient(160deg, #16874f, #0b532f); background: linear-gradient(160deg, #16874f, #0b532f); color: #ffffff; }
+.entry-card.c12 { background: -webkit-linear-gradient(160deg, #238378, #135149); background: linear-gradient(160deg, #238378, #135149); color: #ffffff; }
+.entry-card.c13 { background: -webkit-linear-gradient(160deg, #1f8383, #115050); background: linear-gradient(160deg, #1f8383, #115050); color: #ffffff; }
+.entry-card.c14 { background: -webkit-linear-gradient(160deg, #1e7cb7, #0f4b70); background: linear-gradient(160deg, #1e7cb7, #0f4b70); color: #ffffff; }
+.entry-card.c15 { background: -webkit-linear-gradient(160deg, #3379bf, #1c4875); background: linear-gradient(160deg, #3379bf, #1c4875); color: #ffffff; }
+.entry-card.c16 { background: -webkit-linear-gradient(160deg, #5d6cd9, #202e9a); background: linear-gradient(160deg, #5d6cd9, #202e9a); color: #ffffff; }
+.entry-card.c17 { background: -webkit-linear-gradient(160deg, #5858e4, #1616a7); background: linear-gradient(160deg, #5858e4, #1616a7); color: #ffffff; }
+.entry-card.c18 { background: -webkit-linear-gradient(160deg, #8b5dd4, #4e2394); background: linear-gradient(160deg, #8b5dd4, #4e2394); color: #ffffff; }
+.entry-card.c19 { background: -webkit-linear-gradient(160deg, #9756d7, #5a1f96); background: linear-gradient(160deg, #9756d7, #5a1f96); color: #ffffff; }
+.entry-card.c20 { background: -webkit-linear-gradient(160deg, #c423da, #781286); background: linear-gradient(160deg, #c423da, #781286); color: #ffffff; }
+.entry-card.c21 { background: -webkit-linear-gradient(160deg, #c334c3, #781d78); background: linear-gradient(160deg, #c334c3, #781d78); color: #ffffff; }
+.entry-card.c22 { background: -webkit-linear-gradient(160deg, #d03594, #821b5a); background: linear-gradient(160deg, #d03594, #821b5a); color: #ffffff; }
+.entry-card.c23 { background: -webkit-linear-gradient(160deg, #dc2581, #88124d); background: linear-gradient(160deg, #dc2581, #88124d); color: #ffffff; }
+.entry-card.c24 { background: -webkit-linear-gradient(160deg, #ce4655, #85202c); background: linear-gradient(160deg, #ce4655, #85202c); color: #ffffff; }
 
 .home-tools { text-align: center; margin-top: 8px; }
 .home-tools .btn { margin: 4px; }

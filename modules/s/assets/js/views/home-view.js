@@ -18,7 +18,8 @@
     { c: "c12", h: "课堂剧场.html", i: "🎬", t: "课堂剧场", d: "猫老师动画公开课，点一下就开演" },
     { c: "c13", h: "同步课堂.html", i: "📚", t: "同步课堂", d: "1-6年级大纲全覆盖，一课不跳" },
     { c: "c14", h: "奥数三十六计.html", i: "🏆", t: "奥数三十六计", d: "10080道竞赛题·分步解法·多解法" },
-    { c: "c15", h: "视频课堂.html", i: "🎬", t: "视频课堂", d: "搜B站名师课，官方播放器直接看" },
+    { c: "c15", h: "视频课堂.html", i: "📺", t: "视频课堂", d: "搜B站名师课，官方播放器直接看" },
+    { c: "c16", h: "保命108招.html", i: "🛡️", t: "保命108招", d: "12大类·动漫场景·口诀+情景测验" },
     { c: "c10", h: "针对辅导.html", i: "🩺", t: "针对性辅导", d: "哪里薄弱练哪里，智能推卷" },
     { c: "c7", h: "巩固练习.html", i: "🎯", t: "薄弱点巩固", d: "针对错题，再来练一练" },
     { c: "c8", h: "拼音专区.html", i: "🔡", t: "拼音专区", d: "写法·拼读·四声·组词填字" },
@@ -35,7 +36,7 @@
       '<div class="banner">{{banner}}</div>',
       '<div class="hero"><h1>👧 一年级学习乐园 👦</h1><p>语音 + 动画 + 随机出题，越玩越聪明！</p></div>',
       '<div class="entry-grid">',
-      '<a class="entry-card" v-for="e in entries" :key="e.h" :class="e.c" :href="e.h">',
+      '<a class="entry-card" v-for="e in entries" :key="e.h" :class="cardCls(e)" :href="e.h">',
       '<span class="emj">{{e.i}}</span><span class="t">{{e.t}}</span><span class="d">{{e.d}}</span></a>',
       '</div>',
       '<div class="home-tools">',
@@ -79,7 +80,18 @@
     methods: {
       got: function (id) { return this.st.badges.indexOf(id) >= 0; },
       badgeTitle: function (b) { return b.n + "：" + b.d; },
-      hello: function () { Speech.speak("欢迎来到一年级趣味学习乐园，开始学习吧！", { rate: 0.9 }); }
+      hello: function () { Speech.speak("欢迎来到一年级趣味学习乐园，开始学习吧！", { rate: 0.9 }); },
+      /* ★2026-10-28 配色兜底: home.css 定义了 c1~c24, 入口数据里的 cN 序号
+       *   一旦超出(比如以后加到 c30)或写错, 卡片就会没有配色 → 白字落在白底上完全隐形
+       *   (用户反馈的「很多种板块颜色居然是白色看不清楚」就是这么来的: c12~c15 四个板块无样式)。
+       *   这里统一换算到有效区间并取模循环, 保证任何时刻每张卡片都有配色。 */
+      cardCls: function (e) {
+        var MAX = 24;
+        var n = parseInt(String((e && e.c) || "").replace(/[^0-9]/g, ""), 10);
+        if (!n || n < 1) return "c1";
+        if (n > MAX) n = ((n - 1) % MAX) + 1;
+        return "c" + n;
+      }
     }
   };
 })(window);
