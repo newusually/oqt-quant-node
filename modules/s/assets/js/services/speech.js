@@ -505,8 +505,69 @@
     });
   }
 
+  /* ★2026-10-28 数学符号朗读归一化（用户反馈「加减乘除总是读错」）
+   *   根因: 算式直接丢给 TTS, 而 TTS 遇到运算符各念各的 ——
+   *         "3×4" 常被念成「三 叉 四」、"12÷3" 念成「十二 斜 三」、"9-4" 念成「九 杠 四」。
+   *   做法: 文本入队前, 把运算符先换成中文读法。
+   *   坑: 日期 2026-10-28 / 时间 10:30 里也有符号, 先占位保护, 否则会念成减法。 */
+  function normalizeMath(s) {
+    if (!s || typeof s !== "string") return s;
+    if (!/[0-9]/.test(s)) return s;              // 没有数字就不当算式处理, 省得误伤
+    var holds = [], PH = "MZKEEP", i;
+    s = s.replace(/\d{4}[-\u2013\u2014]\d{1,2}[-\u2013\u2014]\d{1,2}/g, function (m) { holds.push(m); return PH + (holds.length - 1) + "P"; });
+    s = s.replace(/\d{1,2}:\d{2}(:\d{2})?/g, function (m) { holds.push(m); return PH + (holds.length - 1) + "P"; });
+    s = s.replace(/(\d)\s*[\u00D7\u2715*]\s*(\d)/g, "$1 乘以 $2");
+    s = s.replace(/(\d)\s*\u00F7\s*(\d)/g, "$1 除以 $2");
+    s = s.replace(/(\d)\s*\/\s*(\d)/g, "$1 除以 $2");
+    s = s.replace(/(\d)\s*\uFF0B\s*(\d)/g, "$1 加 $2");
+    s = s.replace(/(\d)\s*\+\s*(\d)/g, "$1 加 $2");
+    /* 注意: 半角 "-" 必须放行 —— 日期已由上面的占位保护住了(日期优先被整体保护) */
+    s = s.replace(/(\d)\s*[-－–—]\s*(\d)/g, "$1 减 $2");
+    s = s.replace(/(\d)\s*[>\uFF1E]\s*(\d)/g, "$1 大于 $2");
+    s = s.replace(/(\d)\s*[<\uFF1C]\s*(\d)/g, "$1 小于 $2");
+    s = s.replace(/(\d)\s*=\s*/g, "$1 等于 ");
+    s = s.replace(/\s*=\s*(\d)/g, " 等于 $1");
+    s = s.replace(/\u2026{2,}|\.{3,}/g, " 余 ");
+    s = s.replace(/\?/g, " 多少");
+    for (i = 0; i < holds.length; i++) s = s.replace(PH + i + "P", holds[i]);
+    s = s.replace(/ {2,}/g, " ");   // 连续空格压成一个, 免得朗读时一顿一顿
+    return s.trim();
+  }
+
+  /* ★2026-10-28 音色自动轮换（用户反馈「语音要多种多样的自动读」）
+   *   用户没在声音面板手动固定嗓音时, 每句话轮换一种音色 ——
+   *   普通话女声 / 台湾国语 / 慢速教学音 循环交替, 既听得清又不单调。
+   *   一旦用户手动选过（voicePinned=true）就严格用他选的, 不抢戏。 */
+  var ROTATE_CLOUD = ["g-zh", "g-tw", "g-zh-s", "g-zh", "g-tw"];   // 多给普通话配额, 台湾穿插
+  var rotIdx = -1;
+  function nextRotCloud() {
+    rotIdx = (rotIdx + 1) % ROTATE_CLOUD.length;
+    return ROTATE_CLOUD[rotIdx];
+  }
+
   function push(job) {
     if (!job || ((job.t === null || job.t === undefined) && !job.fn)) return;
+    /* ①数学算式 → 中文读法（英文朗读不处理, 免得把 "3 × 4" 说成中文夹英文） */
+    if (typeof job.t === "string" && !job.en) job.t = normalizeMath(job.t);
+    /* ②内容自动识别（用户要求「检测题目和文字」）:
+     *   很多页面把英文单词/拼音直接丢给 speak() —— 中文引擎会把 cat 念成「擦特」、
+     *   把 mā 当英文字母读。这里按内容自动切换到正确的朗读通道,
+     *   这样任何页面哪怕调用写错, 发音也是对的。 */
+    if (typeof job.t === "string" && job.t && !job.en) {
+      var t0 = job.t;
+      if (/[\u0101\u00E1\u01CE\u00E0\u0113\u00E9\u011B\u00E8\u012B\u00ED\u01D0\u00EC\u014D\u00F3\u01D2\u00F2\u016B\u00FA\u01D4\u00F9\u01D6\u01D7\u01D8\u01D9\u01DA\u01DB\u01DC]/.test(t0) && !/[\u4e00-\u9fa5]/.test(t0)) {
+        /* 带声调的纯拼音 → 转成呼读音再念 */
+        try { var conv = pyText(t0); if (conv) job.t = conv; } catch (e1) {}
+      } else if (isEnText(t0) && t0.replace(/[^A-Za-z]/g, "").length >= 2) {
+        /* 没有中文、且英文字母够多 → 判定为英文内容, 走英文嗓音 */
+        job.en = true;
+      }
+    }
+    /* ②中文内容自动换嗓音 */
+    var st = (App.Store && App.Store.state) ? App.Store.state : null;
+    if (!job.en && !job.local && !job.cloudId && st && !st.voicePinned && st.voiceRotate !== false) {
+      job.cloudId = nextRotCloud();
+    }
     Q.push(job);
     if (Q.length > 40) Q.splice(0, Q.length - 40);   // 防止狂点堆积
     // 只能走联网发音、而用户还没点过页面 → 浏览器会挡住，给个「点我开启声音」的小提示

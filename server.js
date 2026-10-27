@@ -65,7 +65,9 @@ const API_ROUTES = [
   // ★统一榜单/面板 API(所有板块页面共用, 组件化取数入口)
   ['/api/boards/', require('./api/boards')],
   // ★全站行情摘要(总览/播报/AI分析共用)
-  ['/api/market/', require('./api/market')]
+  ['/api/market/', require('./api/market')],
+  // 学习园地: B站教学视频搜索代理(服务端 wbi 签名, 前端走官方 iframe 播放)
+  ['/api/study/', require('./api/study')]
 ];
 
 // ★s 模块的云端 TTS 代理(原始音频, 不是 JSON)
