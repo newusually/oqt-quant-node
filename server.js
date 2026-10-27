@@ -97,7 +97,8 @@ function handleOkxStream(req, res) {
 //   与 /modules/s/data/ 也拦成 403 → Vue 起不来 → 白屏。
 //   改为【只拦项目根下的后端目录】(以 / 开头的一级路径段), 业务模块( modules/*/ )内部不动;
 //   凭证类文件(cred/secret/.env)仍全局拦。
-const STATIC_BLOCK = ['/data/', '/config/', '/core/', '/lib/', '/engines/', '/services/', '/tools/', '/api/', '/node_modules/'];
+// ★凭证目录必须阻断: 里面有 api.json(OKX apiKey/secret/passphrase), 否则任何人都能 GET 下来
+const STATIC_BLOCK = ['/data/', '/config/', '/core/', '/lib/', '/engines/', '/services/', '/tools/', '/api/', '/node_modules/', '/modules/okx/config/']; /* ★凭证目录阻断 */
 function isBlocked(safe) {
   const s = safe.replace(/\\/g, '/'); // Windows 反斜杠归一化，避免漏拦
   // 只拦「根级」后端目录: 路径必须以 /<blocked>/ 开头
@@ -133,13 +134,47 @@ function isActive(windowMs) {
   return (Date.now() - LAST_ACTIVE) < (windowMs || 30 * 60 * 1000);
 }
 
-async function handleApi(res, prefix, api, u, q) {
+// ★读取请求体(JSON)：POST 专用。凭证/密钥这类敏感参数绝不能拼在 URL 上
+//   (URL 会被 apache access log / 浏览器历史记录留存)，必须走 POST body。
+function readJsonBody(req) {
+
+  if (req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'PATCH') return Promise.resolve({});
+
+  return new Promise(function (resolve) {
+
+    var chunks = [], size = 0;
+
+    req.on('data', function (c) {
+
+      size += c.length;
+
+      if (size > 65536) { resolve({}); req.destroy(); return; }
+
+      chunks.push(c);
+
+    });
+
+    req.on('end', function () {
+
+      try { var j = JSON.parse(Buffer.concat(chunks).toString('utf8')); resolve(j && typeof j === 'object' ? j : {}); }
+
+      catch (e) { resolve({}); }
+
+    });
+
+    req.on('error', function () { resolve({}); });
+
+  });
+
+}
+
+async function handleApi(res, prefix, api, u, q, body) {
   markActive();
   let ep = decodeURIComponent(u.pathname.slice(prefix.length));
   if (!ep || ep === '/') ep = 'status';
   if (ep.endsWith('/')) ep = ep.slice(0, -1);
   try {
-    const out = await api.handle(ep, q);
+    const out = await api.handle(ep, q, body || {});
     sendJSON(res, out || { ok: false, err: 'empty' });
   } catch (e) {
     sendJSON(res, { ok: false, err: String(e && e.stack || e) }, 500);
@@ -199,7 +234,8 @@ const server = http.createServer((req, res) => {
   // API 路由
   for (const [prefix, api] of API_ROUTES) {
     if (p.startsWith(prefix)) {
-      handleApi(res, prefix, api, u, u.query).catch(e => sendJSON(res, { ok: false, err: String(e) }, 500));
+      readJsonBody(req).then(function (body) { return handleApi(res, prefix, api, u, u.query, body); })
+        .catch(e => sendJSON(res, { ok: false, err: String(e) }, 500));
       return;
     }
   }
@@ -310,16 +346,16 @@ server.listen(PORT, () => {
    *   序列里 5m 出现两次 → 5m 每 24 分钟追新两次, 其余每 24 分钟一次;
    *   启动 90s 后先给每个周期各补一轮（换机/重启快速追齐）, 再进入常轮转 */
   (function keepLoop() {
-    const SEQ = ['15m', '5m', '3m', '5m', '1h', '2h', '4h'];
+    const SEQ = ['3m', '5m', '15m', '3m', '5m', '1h', '2h', '4h'];
     let i = 0;
     const tick = () => {
       setTimeout(async () => {
         /* ★空闲时降频(1/3 概率)而非完全跳过——原 isActive 全跳导致空闲期间
          *   分时库彻底停更(实测 15m 停 45 分钟), 用户打开页面看到陈旧统计 */
-        if (isActive() || Math.random() < 0.34) await keepGrain(SEQ[i++ % SEQ.length], '分时保鲜');
+        if (isActive() || Math.random() < 0.6) await keepGrain(SEQ[i++ % SEQ.length], '分时保鲜');
         else i++;
         tick();
-      }, 240000);
+      }, isActive() ? 100000 : 240000);
     };
     setTimeout(async () => {
       try {

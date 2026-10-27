@@ -287,13 +287,24 @@
       // 兜底：老式画图层（没有专用括号模块时）
       var stage = stageEl();
       if (!stage || !App.Draw || !nodes.length) return;
-      App.Draw.brace(stage, nodes, { label: _brace.label, color: "#e65100", w: 3, dur: 800 });
+      App.Draw.brace(stage, nodes, { label: _brace.label, color: "#e65100", w: 3, dur: 800, up: curMode === "sub" });
       return;
     }
     if (!nodes.length) { App.Brace.clear(host); return; }
+    /* ★2026-10-26 用户要求：加法括号在【下面】(尖端朝下，不变)；
+     *   减法括号在【上面】、中间尖端朝上；「？个」的问题标签一律在最上面。
+     *   实现：父容器改纵向 flex，用 order 控制括号与图案的上下关系。 */
+    var isSub = curMode === "sub";
+    var par = host.parentNode;
+    if (par) { try { par.style.display = "flex"; par.style.flexDirection = "column"; } catch (e0) {} }
+    var rowEl = $("row"), qEl = $("qlabel");
+    if (rowEl) rowEl.style.order = "2";
+    if (qEl) qEl.style.order = "-1";                 // ★问题标签永远最上面
+    host.style.order = isSub ? "1" : "3";           // 减法：括号在图案上方
     App.Brace.draw(host, {
       span: nodes, label: _brace.label, color: "#e65100",
-      stroke: 4, depth: 26, dur: 800
+      stroke: 4, depth: 26, dur: 800,
+      up: isSub                                      // ★减法：尖端朝上
     });
   }
   function reveal(v, label, sayTxt) {

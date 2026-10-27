@@ -65,7 +65,7 @@ async function updown(opt) {
   opt = opt || {};
   const sector = opt.sector || '';
   const grain = opt.grain || '15m';
-  const maxBars = 9500;
+  const maxBars = 20000;   // ★两年(1h=17520根/2h=8760/4h=4380) 需要更大的窗口
   const bars = Math.max(1, Math.min(maxBars, parseInt(opt.bars, 10) || 9000));
   /* ★按请求窗口决定缓存时长：窗口小=要实时 → 短缓存 */
   const tiny = bars <= 60;
@@ -94,6 +94,34 @@ async function calc(sector, grain, bars, beforeTs, lead) {
   let cov = 0;
   const lastClose = new Map();    // ★instId → 库尾最后一根 {ts,c}（WS 进行中片聚合的"前收"基准）
 
+  /* ★2026-10-26 预计算库优先：历史直接读表（毫秒级），不再每次扫描 287 个 K 线库。
+   *   启用条件: 全市场(无板块筛选) + 主力BTC + 不翻历史(beforeTs=0) —— 即默认场景；
+   *   其余组合（板块/其它主力/翻历史）仍走实时扫描，结果一致。 */
+  let pre = null;
+  try {
+    const ST = require('./updownstore');
+    if (!sector && (!lead || String(lead).toUpperCase() === 'BTC') && !beforeTs) pre = ST.agg(grain);
+  } catch (e) { pre = null; }
+
+  if (pre && pre.size) {
+    for (const a of pre.values()) agg.set(a.ts, a);
+    cov = list.length;
+    for (const x of list) {
+      const db = roStore(x.instId, grain);
+      if (!db) continue;
+      try {
+        const r = db.prepare('SELECT ts,c FROM kline ORDER BY ts DESC LIMIT 1').get();
+        if (r) lastClose.set(x.instId, { ts: r.ts, c: r.c });
+      } catch (e) { }
+      if (leadInst && x.instId === leadInst.instId && !leadCandles) {
+        try {
+          const full = db.prepare('SELECT ts,o,h,l,c,v FROM kline ORDER BY ts DESC LIMIT ?').all(bars + 1);
+          full.reverse();
+          if (full && full.length >= 2) leadCandles = full;
+        } catch (e) { leadCandles = null; }
+      }
+    }
+  } else {
   for (const x of list) {
     const db = roStore(x.instId, grain);
     if (!db) continue;
@@ -128,8 +156,13 @@ async function calc(sector, grain, bars, beforeTs, lead) {
       let a = agg.get(ts);
       if (!a) { a = { ts, up: 0, down: 0, flat: 0, n: 0 }; agg.set(ts, a); }
       a.n++;
-      if (pct > 0) a.up++; else if (pct < 0) a.down++; else a.flat++;
+      /* ★2026-10-26 用户口径：不涨不跌(平盘)也算跌 → 只有 pct>0 才算涨
+       *   flat 仍单独计数（备查），但 down 已包含平盘，保证 up + down = total */
+      if (pct > 0) a.up++; else { a.down++; if (pct === 0) a.flat++; }
+      /* ★该时间片跌得最狠的合约 → 表格「最低价 / 最低价跌幅」两列 */
+      if (!a.worst || pct < a.worst.pct) a.worst = { inst: x.instId, px: cur, pct: pct };
     }
+  }
   }
 
   let arr = Array.from(agg.values()).sort((a, b) => a.ts - b.ts).slice(-bars);
@@ -191,7 +224,9 @@ async function calc(sector, grain, bars, beforeTs, lead) {
         if (!px || !lc || !isFinite(lc.c) || lc.c <= 0) continue;
         const p = (px - lc.c) / lc.c;
         a.n++;
-        if (p > 0) a.up++; else if (p < 0) a.down++; else a.flat++;
+        /* ★同上口径(实时WS片)：平盘算跌 */
+        if (p > 0) a.up++; else { a.down++; if (p === 0) a.flat++; }
+        if (!a.worst || p < a.worst.pct) a.worst = { inst: x.instId, px: px, pct: p };
       }
       /* 覆盖≥30% 合约才纳入（WS 快照刚启动时避免残缺统计） */
       if (a.n >= Math.max(2, Math.floor(list.length * 0.3))) {
@@ -233,6 +268,10 @@ async function calc(sector, grain, bars, beforeTs, lead) {
     }
     return {
       ts: b.ts, up: b.up, down: b.down, flat: b.flat, total: b.n,
+      /* ★最低价 / 最低价跌幅（该时间片跌得最狠的合约） */
+      lowPx: b.worst ? b.worst.px : null,
+      lowPct: b.worst ? +(b.worst.pct * 100).toFixed(2) : null,
+      lowInst: b.worst ? b.worst.inst : null,
       upRatio: +((ratio * 100).toFixed(2)), diff: diff,
       leadPct: (lp === null || lp === undefined) ? null : +lp.toFixed(2),
       idx: idx                       // ★主力×差额 共振强度指数

@@ -158,3 +158,20 @@ a{color:var(--accent);text-decoration:none}
 .ic-cat{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .ic-chip{font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.32);color:#cdb8ff}
 .ic-concept{font-size:13.5px;line-height:1.9;color:var(--txt)}
+
+/* ---------- ★2026-10-26 OKX API 凭证设置弹窗（cred-*） ---------- */
+.cred-mask{position:fixed;inset:0;z-index:120;background:rgba(6,9,16,.68);display:flex;align-items:center;justify-content:center}
+.cred-box{width:min(460px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.cred-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:15px}
+.cred-x{cursor:pointer;color:var(--txt2);font-size:15px;padding:0 4px}
+.cred-x:hover{color:var(--txt)}
+.cred-st{font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--txt2);word-break:break-all}
+.cred-st.ok{border-color:rgba(33,186,114,.45);color:#5fd39f}
+.cred-st.no{border-color:rgba(239,75,75,.45);color:#ff8a8a}
+.cred-lb{display:block;font-size:12.5px;color:var(--txt2);margin-bottom:10px}
+.cred-lb input{display:block;width:100%;margin-top:5px;padding:8px 10px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--txt);font-size:13px;box-sizing:border-box}
+.cred-lb input:focus{outline:none;border-color:var(--accent)}
+.cred-tip{font-size:11.5px;line-height:1.7;color:var(--txt2);margin:2px 0 14px}
+.cred-tip code{background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+.cred-btns{display:flex;gap:8px;flex-wrap:wrap}
+.cred-btns .btn.primary{background:#2f81f7}

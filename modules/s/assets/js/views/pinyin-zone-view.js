@@ -51,7 +51,7 @@
       '</div>',
       '</div>',
       '<div class="sxs-wrap">',
-      '<div class="sxscard" v-for="(c, i) in writeCards" :key="c.s" :class="[posCls(c.pos), {on: hero.s === c.s}]" @click="pickWrite(c)">',
+      '<div class="sxscard" v-for="(c, i) in writeCards" :key="c.s" :class="[posCls(c.pos), {on: hero.s === c.s, reading: readIdx === i}]" @click="pickWrite(c)">',
       '<div class="sxs" :class="posCls(c.pos)"><span class="sxs-letter">{{c.s}}</span></div>',
       '<div class="sxs-pos">{{c.pos}}</div><div class="sxs-name">{{c.s}}</div>',
       '</div>',
@@ -84,7 +84,7 @@
       '<div class="card lpanel" v-show="tab === \'mem\'">',
       '<div class="pz-intro">🧠 用口诀记住拼音长什么样：</div>',
       '<div class="mem-wrap">',
-      '<div class="memcard" v-for="(c, i) in memCards" :key="i" @click="readPy(c.k)">',
+      '<div class="memcard" v-for="(c, i) in memCards" :key="i" :class="{reading: memIdx === i}" @click="readPy(c.k)">',
       '<div class="mem-k">{{c.k}}</div><div class="mem-tip">{{c.tip}}</div></div>',
       '</div>',
       '<div class="ctr"><button class="btn spk" @click="readMemAll">🔊 按顺序读全部</button></div>',
@@ -118,6 +118,9 @@
         hero: { s: "b", pos: "上中格", tip: "" },
         heroN: 0, heroAnim: true,
         memCards: PZ.memoryCards(),
+        /* ★2026-10-26 按顺序朗读时，当前正在读的卡片高亮（金黄色边框） */
+        readIdx: -1,
+        memIdx: -1,
         compose: blank(PZ.composeQuiz()),
         blend: blank(PZ.blendQuiz()),
         tone: blank(PZ.toneQuiz()),
@@ -149,11 +152,24 @@
       },
       shuffleWrite: function () { this.writeCards = U.shuffled(PZ.writeCards()); },
       readPy: function (s) { Speech.speakPinyin(s, { rate: 0.7 }); },
+      /* ★2026-10-26 用户要求：按顺序读时，先把方框高亮成金黄色+显示边框，再念 */
       readWriteAll: function () {
-        Speech.seq(this.writeCards.map(function (c) { return c.s; }));
+        var self = this, arr = [];
+        (this.writeCards || []).forEach(function (c, i) {
+          arr.push(function () { self.readIdx = i; self.hero = { s: c.s, pos: c.pos, tip: PZ.MEM[c.s] || "" }; });
+          arr.push(c.s);
+        });
+        arr.push(function () { self.readIdx = -1; });
+        Speech.seq(arr);
       },
       readMemAll: function () {
-        Speech.seq(this.memCards.map(function (c) { return c.k; }));
+        var self = this, arr = [];
+        (this.memCards || []).forEach(function (c, i) {
+          arr.push(function () { self.memIdx = i; });
+          arr.push(c.k);
+        });
+        arr.push(function () { self.memIdx = -1; });
+        Speech.seq(arr);
       },
       quizCls: function (box, i) {
         if (!box.done) return {};

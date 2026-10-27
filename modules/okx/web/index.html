@@ -19,7 +19,9 @@
     <a href="/modules/okx/web/index.html" class="on">OKX</a>
     <a href="/modules/s/index.html">学习乐园</a>
   </nav>
-  <div class="env"><button id="btn-dock" class="btn" title="自由布局: 面板可拖动/缩放/悬浮/隐藏/删除">🧩 布局</button> <button id="btn-dock-reset" class="btn" title="复位所有面板">↺ 复位</button> <span id="clock" class="num"></span></div>
+  <div class="env">
+    <button id="btn-cred" class="btn" title="填写 OKX API Key / Secret / Passphrase（只保存在本机）">🔑 API 设置</button>
+    <button id="btn-dock" class="btn" title="自由布局: 面板可拖动/缩放/悬浮/隐藏/删除">🧩 布局</button> <button id="btn-dock-reset" class="btn" title="复位所有面板">↺ 复位</button> <span id="clock" class="num"></span></div>
 </header>
 
 <div class="lay">
@@ -171,6 +173,24 @@
 </div>
 
 <footer class="foot">OKX 永续 · 真实行情(公共接口, 无需凭证) → 本地 node:sqlite 存储 → 本地算指标(MA/MACD) · 蜡烛图+均线 · 纯 Node.js + 原生 JS/AJAX/Canvas</footer>
+
+<!-- ★OKX API 凭证设置弹窗：填 apiKey / secret / passphrase，POST 保存到本机 config/api.json -->
+<div id="cred-mask" class="cred-mask" style="display:none">
+  <div class="cred-box">
+    <div class="cred-h"><b>OKX API 设置</b><span id="cred-close" class="cred-x">✕</span></div>
+    <div id="cred-st" class="cred-st">状态: 检测中…</div>
+    <label class="cred-lb">API Key<input id="cred-key" type="text" autocomplete="off" spellcheck="false" placeholder="OKX 后台创建的 API Key"></label>
+    <label class="cred-lb">Secret Key<input id="cred-sec" type="password" autocomplete="new-password" placeholder="Secret Key（不回显）"></label>
+    <label class="cred-lb">Passphrase<input id="cred-pass" type="password" autocomplete="new-password" placeholder="创建 API 时自己设置的密码短语"></label>
+    <div class="cred-tip">凭证只写在本机 <code>modules/okx/config/api.json</code>（权限 600，已被 .gitignore 忽略，不会进 git）。
+      建议权限只勾【只读】；若 API 绑定了 IP 白名单，需把本机公网 IP 加进去。</div>
+    <div class="cred-btns">
+      <button id="cred-save" class="btn primary">保存并连接</button>
+      <button id="cred-test" class="btn">测试连接</button>
+      <button id="cred-clear" class="btn">清除凭证</button>
+    </div>
+  </div>
+</div>
 
 <!-- ★用户 2026-10-25: "okx 页面选项卡有问题 打开居然播报语音了 给我禁止" → 本页不加载 announcer.js -->
 <script src="/web/js/page-common.js"></script>

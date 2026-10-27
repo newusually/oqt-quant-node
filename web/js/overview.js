@@ -490,7 +490,17 @@
      *   → K线(分时切换) + 详细表格(独立分时选项卡) + 该分时买卖信号回测
      *   ★2026-10-26 用户要求: 分时顺序 3m/5m/15m/1h/2h/4h；表格与回测均带分页 */
     if (window.UpDown && $('updown-panel')) {
-      window.UpDown.mount('updown-panel', { grain: '15m', sector: '', lead: 'BTC', bars: 9500, interval: 30000 });
+      window.UpDown.mount('updown-panel', { grain: '15m', sector: '', lead: 'BTC', bars: 18000, interval: 30000 });
+
+
+
+    /* ★2026-10-26 用户要求: 页面最下方「历史回补进度」面板（两年K线入库进度） */
+
+    if (window.Backfill) {
+
+      try { window.Backfill.mount('backfill-panel'); } catch (e) { }
+
+    }
     }
 
     /* ★2026-10-26 用户要求: 删除总览底部悬浮K线小窗（CelestiaTIA·5分钟✕那类）

@@ -27,6 +27,28 @@
     else { weak[kp] = (weak[kp] || 0) + 1; }
     saveWeak();
   }
+  /* ---------- ★已做题目记录（2026-10-26 用户要求：优先出没做过的题） ----------
+   *   每抽到一道题就把它的 qKey 记进 localStorage（fg_done），
+   *   下次抽题优先从「没做过」的池子里取，做完一轮才回头重出旧题。 */
+  var doneQ = {};
+  try { var sd = w.localStorage.getItem('fg_done'); if (sd) doneQ = JSON.parse(sd) || {}; } catch (e) {}
+  /* 上万条记录，每次都全量写回会卡 → 3 秒合并写一次 + 关页面时补写 */
+  var doneDirty = false;
+  function saveDone() { try { w.localStorage.setItem('fg_done', JSON.stringify(doneQ)); } catch (e) {} }
+  function markDone(q) {
+    var k = qKey(q);
+    if (!k || doneQ[k]) return;
+    doneQ[k] = 1;
+    if (!doneDirty) {
+      doneDirty = true;
+      setTimeout(function () { saveDone(); doneDirty = false; }, 3000);
+    }
+  }
+  try { w.addEventListener('pagehide', function () { if (doneDirty) saveDone(); }); } catch (e) {}
+  function doneCount() { return Object.keys(doneQ).length; }
+  function clearDone() { doneQ = {}; saveDone(); }
+  function isDone(q) { return !!doneQ[qKey(q)]; }
+
   function weakList() {
     return Object.keys(weak).map(function (k) { return { kp: k, n: weak[k] }; })
                 .sort(function (a, b) { return b.n - a.n; });
@@ -90,16 +112,20 @@
       var f = all.filter(function (q) { return opt.kps.indexOf(q.kp) >= 0; });
       if (f.length) all = f;
     }
+    /* ★优先「没做过」的题：全部做完后自动回到全部题库重来一轮 */
+    var fresh = all.filter(function (q) { return !isDone(q); });
+    var pool = fresh.length ? fresh : all;
     var used = opt.exclude || {};
     var out = [], guard = 0;
     while (out.length < n && guard++ < n * 60 + 200) {
-      if (!all.length) break;
-      var q = all[U.R(0, all.length - 1)];
+      if (!pool.length) break;
+      var q = pool[U.R(0, pool.length - 1)];
       var key = qKey(q);
       if (used[key]) continue;
       used[key] = true;
       // 变种：应用题每次抽都尝试换图
       if (q.kind && Math.random() < 0.7) q = mutateProblem(q);
+      markDone(q);
       out.push(q);
     }
     return out;
@@ -121,7 +147,14 @@
       if (externalLoaded) { resolve(true); return; }
       App.ajax(App.config.bankDir + "/manifest.json").then(function (man) {
         var list = (man && man.banks) || [];
-        var jobs = list.map(function (b) {
+        /* ★2026-10-26 大题库（生成_*，共 1.4 万道、约 3.8MB）改为后台延迟加载：
+         *   先加载原有小题库让页面立刻可用，3 秒后再把大题库并入池子，
+         *   避免一次拉取几 MB 卡住首屏（历史上有过 s 模块白屏）。 */
+        var now = [], later = [];
+        list.forEach(function (b) {
+          (String(b.file || '').indexOf('生成_') === 0 ? later : now).push(b);
+        });
+        function one(b) {
           return App.ajax(App.config.bankDir + "/" + b.file).then(function (j) {
             var t = j.type || b.type;
             if (!t) return;
@@ -132,12 +165,17 @@
               register(t, { questions: qs });
             }
           }).catch(function () {});
+        }
+        function runAll(arr, cb) {
+          var jobs = arr.map(one), done = 0;
+          if (!jobs.length) { cb(); return; }
+          jobs.forEach(function (p) { p.then(function () { if (++done >= jobs.length) cb(); }); });
+        }
+        runAll(now, function () {
+          externalLoaded = true;
+          resolve(true);
+          setTimeout(function () { runAll(later, function () {}); }, 3000);
         });
-        // 顺序无关，全部尝试
-        var done = 0;
-        jobs.forEach(function (p) { p.then(function () { if (++done >= jobs.length) finish(); }); });
-        if (!jobs.length) finish();
-        function finish() { externalLoaded = true; resolve(true); }
       }).catch(function () { externalLoaded = true; resolve(false); });
     });
   }
@@ -151,6 +189,11 @@
     record: record,
     weakList: weakList,
     clearWeak: clearWeak,
-    qKey: qKey
+    qKey: qKey,
+    /* ★已做题目记录 */
+    doneCount: doneCount,
+    clearDone: clearDone,
+    isDone: isDone,
+    markDone: markDone
   };
 })(window);

@@ -338,6 +338,19 @@ async function handle(ep, q) {
       }
     }
 
+    /* ★2026-10-26 用户要求：连续上涨/下跌家数 > N 的区段统计 + BTC 多空关系核实 */
+    case 'streak': {
+      try {
+        return await require('../modules/okx/engines/streak').streak({
+          grain: q.grain || '15m',
+          thr: int(q.thr, 100),
+          minLen: int(q.minLen, 2),
+          bars: int(q.bars, 18000),
+          maxRows: int(q.maxRows, 400)
+        });
+      } catch (e) { return { ok: false, err: String((e && e.message) || e), rows: [] }; }
+    }
+
     /* ★★★首页总览：BTC 涨跌家数买卖信号回测（2026-10-26）
      *   "下跌家数≥50%连续3次 → 第4次≤20% → 只买BTC"
      *   计算 15m/5m/3m/1h/2h/4h 六个周期，输出全部历史信号 + 汇总回测表 */

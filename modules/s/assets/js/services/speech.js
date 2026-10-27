@@ -293,8 +293,9 @@
   function speakEnLocal(text, opt) { push({ t: text, en: true, opt: opt, local: true }); }
 
   /* ---------- 拼音朗读：按中文自然语言读，绝不被读成英文字母 ---------- */
-  var PY_INIT = { b: "波", p: "坡", m: "摸", f: "佛", d: "得", t: "特", n: "呢", l: "勒", g: "哥", k: "科", h: "喝", j: "鸡", q: "七", x: "西", zh: "知", ch: "吃", sh: "诗", z: "资", c: "刺", s: "思", r: "日", y: "衣", w: "乌" };
-  var PY_WHOLE = { zhi: "知", chi: "吃", shi: "诗", ri: "日", zi: "资", ci: "刺", si: "思", yi: "衣", wu: "乌", yu: "迂", ye: "耶", yue: "月", yuan: "元", yin: "音", yun: "云", ying: "英", zhei: "这", shei: "谁" };
+  /* ★呼读音按小学教材标准：n=讷(nè)、c=雌(cī)（原写成“呢/刺”，声调与教材不一致 → 听着不对） */
+  var PY_INIT = { b: "波", p: "坡", m: "摸", f: "佛", d: "得", t: "特", n: "讷", l: "勒", g: "哥", k: "科", h: "喝", j: "基", q: "欺", x: "希", zh: "知", ch: "吃", sh: "诗", z: "资", c: "雌", s: "思", r: "日", y: "衣", w: "乌" };
+  var PY_WHOLE = { zhi: "知", chi: "吃", shi: "诗", ri: "日", zi: "资", ci: "雌", si: "思", yi: "衣", wu: "乌", yu: "迂", ye: "耶", yue: "月", yuan: "元", yin: "音", yun: "云", ying: "英", zhei: "这", shei: "谁" };
   var PY_FIN = {
     a: "啊", o: "喔", e: "鹅", i: "衣", u: "乌", "ü": "迂", ai: "爱", ei: "欸", ui: "威", ao: "熬", ou: "欧", iu: "优",
     ie: "耶", "üe": "约", ue: "约", er: "儿", an: "安", en: "恩", in: "音", un: "温", "ün": "晕", ang: "昂", eng: "鞥", ing: "英", ong: "翁",

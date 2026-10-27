@@ -1,15 +1,100 @@
 {
-  "说明": "题库融合清单。把任意真题卷（多份 JSON）放进来，系统在加载时会按 type 自动融合到对应题库池，与内置随机题库一起使用。字段 type 取值：math（数学测试卷）/ chinese（语文测试卷）/ problems（看图学应用）/ pinyin（拼音真题）/ english（英语真题）。每份文件格式见各 .json。",
-  "banks": [
-    { "file": "数学真题A.json", "type": "math", "name": "一年级数学期末真题A（人教版·组合卷）" },
-    { "file": "数学真题B.json", "type": "math", "name": "一年级数学真题B（口算·比大小·填空·应用）" },
-    { "file": "数学真题C.json", "type": "math", "name": "一年级数学真题C（看图列式·乘除法·混合）" },
-    { "file": "语文真题A.json", "type": "chinese", "name": "一年级语文期末真题A（看拼音/反义词/量词/课文）" },
-    { "file": "语文真题B.json", "type": "chinese", "name": "一年级语文真题B（看拼音写词/课文/阅读/连线）" },
-    { "file": "看图应用题.json", "type": "problems", "name": "看图应用题精选（动·植·果）" },
-    { "file": "数学拓展.json", "type": "math", "name": "数学拓展与易错（比多少/排队/还原）" },
-    { "file": "语文拓展.json", "type": "chinese", "name": "语文拓展与易错（形近字/多音字/笔画）" },
-    { "file": "拼音真题.json", "type": "pinyin", "name": "拼音真题（选拼音/选汉字/声调/组词填字）" },
-    { "file": "英语真题.json", "type": "english", "name": "英语真题（选词/听力/拼写/完形填空）" }
-  ]
+ "说明": "题库融合清单。把任意真题卷（多份 JSON）放进来，系统在加载时会按 type 自动融合到对应题库池，与内置随机题库一起使用。字段 type 取值：math（数学测试卷）/ chinese（语文测试卷）/ problems（看图学应用）/ pinyin（拼音真题）/ english（英语真题）。每份文件格式见各 .json。",
+ "banks": [
+  {
+   "file": "数学真题A.json",
+   "type": "math",
+   "name": "一年级数学期末真题A（人教版·组合卷）"
+  },
+  {
+   "file": "数学真题B.json",
+   "type": "math",
+   "name": "一年级数学真题B（口算·比大小·填空·应用）"
+  },
+  {
+   "file": "数学真题C.json",
+   "type": "math",
+   "name": "一年级数学真题C（看图列式·乘除法·混合）"
+  },
+  {
+   "file": "语文真题A.json",
+   "type": "chinese",
+   "name": "一年级语文期末真题A（看拼音/反义词/量词/课文）"
+  },
+  {
+   "file": "语文真题B.json",
+   "type": "chinese",
+   "name": "一年级语文真题B（看拼音写词/课文/阅读/连线）"
+  },
+  {
+   "file": "看图应用题.json",
+   "type": "problems",
+   "name": "看图应用题精选（动·植·果）"
+  },
+  {
+   "file": "数学拓展.json",
+   "type": "math",
+   "name": "数学拓展与易错（比多少/排队/还原）"
+  },
+  {
+   "file": "语文拓展.json",
+   "type": "chinese",
+   "name": "语文拓展与易错（形近字/多音字/笔画）"
+  },
+  {
+   "file": "拼音真题.json",
+   "type": "pinyin",
+   "name": "拼音真题（选拼音/选汉字/声调/组词填字）"
+  },
+  {
+   "file": "英语真题.json",
+   "type": "english",
+   "name": "英语真题（选词/听力/拼写/完形填空）"
+  },
+  {
+   "file": "生成_拼音题库.json",
+   "type": "pinyin",
+   "name": "生成·拼音题库（海量·含声母韵母声调字母）"
+  },
+  {
+   "file": "生成_语文题库.json",
+   "type": "chinese",
+   "name": "生成·语文题库（看拼音写词/组词/成语/注音）"
+  },
+  {
+   "file": "生成_英语题库.json",
+   "type": "english",
+   "name": "生成·英语题库（单词/释义/拼写/同反义/字母）"
+  },
+  {
+   "file": "生成_数学题库.json",
+   "type": "math",
+   "name": "生成·数学题库（口算/乘除/比大小/混合/元角）"
+  },
+  {
+   "file": "生成_脑筋急转弯.json",
+   "type": "riddle",
+   "name": "生成·脑筋急转弯（思维灵活性）"
+  },
+  {
+   "file": "生成_安全自护.json",
+   "type": "safety",
+   "name": "生成·安全自护（火灾/地震/交通/防溺水）"
+  },
+  {
+   "file": "生成_生活常识.json",
+   "type": "life",
+   "name": "生成·生活常识（健康/卫生/环保）"
+  },
+  {
+   "file": "生成_交际处世.json",
+   "type": "social",
+   "name": "生成·交际与为人处世（学校/朋友/礼貌）"
+  },
+  {
+   "file": "生成_思维训练.json",
+   "type": "thinking",
+   "name": "生成·思维训练（和差倍/鸡兔同笼/植树/归一/年龄）"
+  }
+ ]
 }

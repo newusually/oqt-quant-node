@@ -10,11 +10,50 @@ const path = require('path');
 const BASE = 'https://www.okx.com';
 const CFG_PATH = path.join(__dirname, '../config/api.json');
 let _cred = null;
+let _credAt = 0;
 function cred() {
-  if (_cred === null) {
+  // 已读到凭证 → 不再重复读盘；未配置(false) → 每 5 秒重试一次，
+  // 这样用户在页面上填写凭证后无需重启服务即可生效。
+  const now = Date.now();
+  if (_cred === null || (_cred === false && now - _credAt > 5000)) {
+    _credAt = now;
     try { _cred = JSON.parse(fs.readFileSync(CFG_PATH, 'utf8')); } catch (e) { _cred = false; }
   }
   return _cred || null;
+}
+
+// 前端「API 设置」保存凭证 → 写入 config/api.json(权限 600, 已被 .gitignore 忽略)
+function saveCred(c) {
+  const obj = {
+    apiKey: String((c && c.apiKey) || '').trim(),
+    secret: String((c && c.secret) || '').trim(),
+    passphrase: String((c && c.passphrase) || '').trim()
+  };
+  if (!obj.apiKey || !obj.secret || !obj.passphrase) return { ok: false, err: 'apiKey / secret / passphrase 三项都不能为空' };
+  try {
+    fs.writeFileSync(CFG_PATH, JSON.stringify(obj, null, 2) + '\n', { mode: 0o600 });
+    fs.chmodSync(CFG_PATH, 0o600);
+  } catch (e) { return { ok: false, err: '凭证写入失败: ' + e.message }; }
+  _cred = obj; _credAt = Date.now();
+  return { ok: true };
+}
+
+function clearCred() {
+  try { fs.unlinkSync(CFG_PATH); } catch (e) { }
+  _cred = false; _credAt = Date.now();
+  return { ok: true };
+}
+
+// 状态(仅回显 apiKey 掩码, 绝不回传 secret/passphrase)
+function credInfo() {
+  const c = cred();
+  const k = c && c.apiKey ? c.apiKey : '';
+  return {
+    ok: true,
+    configured: !!c,
+    apiKey: k ? (k.slice(0, 6) + '****' + k.slice(-4)) : '',
+    path: 'modules/okx/config/api.json'
+  };
 }
 
 function sign(ts, method, requestPath, bodyStr) {
@@ -93,4 +132,4 @@ async function fillsAll(maxPages) {
   return { ok: true, data: all };
 }
 
-module.exports = { call, balance, positions, fills, fillsAll, cred, BASE };
+module.exports = { call, balance, positions, fills, fillsAll, cred, credInfo, saveCred, clearCred, BASE };

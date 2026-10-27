@@ -796,3 +796,34 @@
 .chart-box, .md-chart, .cd-chart, .sg-kchart, .fl-chart {
   position: relative;
 }
+
+/* ---------- ★2026-10-26 历史回补进度面板（bf-*） ---------- */
+.bf-wrap{padding:4px 2px}
+.bf-sum{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:4px 0 10px;font-size:12.5px;color:#8b94ad}
+.bf-bar{position:relative;flex:1;min-width:240px;height:15px;border-radius:8px;background:#1b2336;overflow:hidden;border:1px solid #26304a}
+.bf-bar>i{display:block;height:100%;background:linear-gradient(90deg,#2f81f7,#5b9bff);transition:width .4s}
+.bf-bar>span{position:absolute;left:0;right:0;top:0;text-align:center;font-size:10.5px;line-height:15px;color:#e6ebf5;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.bf-kv b{color:#c3cbdd;font-weight:600}
+.bf-tb{width:100%;border-collapse:collapse;font-size:12.5px}
+.bf-tb th,.bf-tb td{padding:6px 8px;border-bottom:1px solid #232d45;text-align:left;white-space:nowrap}
+.bf-tb th{color:#8b94ad;font-weight:600;background:rgba(255,255,255,.02)}
+.bf-tb td.num{text-align:right;font-variant-numeric:tabular-nums}
+.bf-pb{position:relative;width:160px;height:12px;border-radius:7px;background:#1b2336;overflow:hidden;border:1px solid #26304a}
+.bf-pb>i{display:block;height:100%;background:#2f81f7;transition:width .4s}
+.bf-pb.done>i{background:#21ba72}
+.bf-pb.run>i{background:#f0a020}
+.bf-st{font-size:11.5px;padding:1px 8px;border-radius:10px}
+.bf-st.done{background:rgba(33,186,114,.15);color:#5fd39f}
+.bf-st.most{background:rgba(77,141,255,.15);color:#8fb6ff}
+.bf-st.half{background:rgba(240,160,32,.15);color:#ffc866}
+.bf-st.none{background:rgba(139,148,173,.14);color:#9aa4bb}
+.bf-name{color:#e6ebf5;font-weight:600}
+.bf-sec{font-size:11px;color:#8b94ad;margin-left:6px}
+.bf-live{color:#ffc866;font-size:11.5px}
+
+/* ★2026-10-26 连续涨跌家数统计（ud-strwrap / ud-strconcl） */
+.ud-strwrap { margin-top: 10px; }
+.ud-strconcl { background: rgba(77, 141, 255, .08); border: 1px solid rgba(77, 141, 255, .28);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-size: 12.5px; line-height: 1.9; color: #c3cbdd; }
+.ud-strconcl div:before { content: ''; }
+.ud-strwrap .ud-excel { font-size: 12px; }

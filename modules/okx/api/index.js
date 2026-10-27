@@ -4,8 +4,32 @@
 'use strict';
 const eng = require('../engines');
 const realtime = require('../engines/realtime');
+const okxapi = require('../engines/okxapi');
 
-async function handle(ep, q) {
+// ★OKX API 凭证管理: 页面「API 设置」输入 apiKey/secret/passphrase
+//   只接受 POST(凭证不能出现在 URL 上, 会被 access log 留存)
+//   action: status(默认) / save / test / clear
+async function credHandle(q, body) {
+  const act = (body && body.action) || 'status';
+  if (act === 'status') return await okxapi.credInfo();
+  if (act === 'save') {
+    const r = okxapi.saveCred(body);
+    if (!r.ok) return r;
+    const acc = await eng.account();
+    const info = okxapi.credInfo();
+    if (!acc.ok) return { ok: false, saved: true, apiKey: info.apiKey, err: '凭证已保存, 但连接 OKX 失败: ' + acc.err };
+    return { ok: true, msg: '已连接 OKX 账户', apiKey: info.apiKey, totalEq: acc.totalEq, ccy: acc.ccy };
+  }
+  if (act === 'test') {
+    const acc = await eng.account();
+    if (!acc.ok) return { ok: false, err: acc.err };
+    return { ok: true, msg: 'OKX 账户连接正常', totalEq: acc.totalEq, ccy: acc.ccy };
+  }
+  if (act === 'clear') { okxapi.clearCred(); return { ok: true, msg: '凭证已清除' }; }
+  return { ok: false, err: 'unknown cred action ' + act };
+}
+
+async function handle(ep, q, body) {
   switch (ep) {
     case 'instruments': return await eng.instruments(q.force === '1' || q.force === 'true');
     // ★实时行情（公共接口, 无需凭证）
@@ -28,6 +52,9 @@ async function handle(ep, q) {
     case 'pnl':     return await eng.pnl();
     case 'trades':  return await eng.trades(parseInt(q.limit || 200, 10));
     case 'status':  return await eng.status();
+    case 'cred':    return await credHandle(q, body);
+    // ★历史回补进度（页面底部进度面板）
+    case 'backfillprogress': return await require('../engines/backfillprogress').progress(q);
     default: return { ok: false, err: 'unknown okx ep ' + ep };
   }
 }

@@ -348,10 +348,60 @@
     }).catch(function (e) { $('idx-info').textContent = '错误: ' + e; });
   }
 
+  // ---------------- OKX API 凭证设置（页面填写 apiKey/secret/passphrase） ----------------
+  function credPost(data) {
+    return fetch('/api/okx/cred', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {})
+    }).then(function (r) { return r.json(); });
+  }
+  function credStatus() {
+    return credPost({ action: 'status' }).then(function (r) {
+      var el = $('cred-st');
+      if (el) {
+        el.className = 'cred-st ' + (r.configured ? 'ok' : 'no');
+        el.textContent = r.configured
+          ? ('已配置：' + r.apiKey + '（保存在 ' + r.path + '）')
+          : '未配置凭证：账户净值 / 持仓 / 成交流水读不到（行情K线不受影响）';
+      }
+      return r;
+    }).catch(function () { return { ok: false }; });
+  }
+  function credRefreshData() { loadAccount(); loadPnl(); loadTrades(); loadPositions(); }
+  function initCred() {
+    var mask = $('cred-mask'), bCred = $('btn-cred');
+    if (!mask || !bCred) return;
+    bCred.onclick = function () { mask.style.display = 'flex'; credStatus(); };
+    $('cred-close').onclick = function () { mask.style.display = 'none'; };
+    mask.addEventListener('click', function (e) { if (e.target === mask) mask.style.display = 'none'; });
+    $('cred-save').onclick = function () {
+      var btn = this; btn.disabled = true; btn.textContent = '连接中…';
+      credPost({
+        action: 'save',
+        apiKey: $('cred-key').value, secret: $('cred-sec').value, passphrase: $('cred-pass').value
+      }).then(function (r) {
+        btn.disabled = false; btn.textContent = '保存并连接';
+        toast(r.ok ? ('已连接 OKX 账户 · 净值 ' + fp(r.totalEq) + ' ' + r.ccy) : r.err, !r.ok);
+        if (r.ok) { mask.style.display = 'none'; $('cred-sec').value = ''; $('cred-pass').value = ''; credRefreshData(); }
+        credStatus();
+      });
+    };
+    $('cred-test').onclick = function () {
+      var btn = this; btn.disabled = true; btn.textContent = '测试中…';
+      credPost({ action: 'test' }).then(function (r) {
+        btn.disabled = false; btn.textContent = '测试连接';
+        toast(r.ok ? ('连接正常 · 净值 ' + fp(r.totalEq) + ' ' + r.ccy) : r.err, !r.ok);
+      });
+    };
+    $('cred-clear').onclick = function () {
+      credPost({ action: 'clear' }).then(function () { toast('凭证已清除'); credStatus(); });
+    };
+    credStatus();
+  }
+
   // ---------------- 账户/盈亏/成交 ----------------
   function loadAccount() {
     api('account').then(function (a) {
-      if (!a.ok) { $('s-eq').textContent = '-'; return; }
+      if (!a.ok) { $('s-eq').textContent = /凭证/.test(a.err || '') ? '未配置 API' : '-'; $('s-eq-chg').textContent = '点右上角「🔑 API 设置」填写'; return; }
       ACC = a;
       var ccy = a.ccy || 'USDT';
       $('s-eq').textContent = fp(a.totalEq) + ' ' + ccy;
@@ -638,6 +688,7 @@
     $('btn-zoommax').onclick = function () { var cv = $('idxcv'); if (cv && cv._resetView) cv._resetView(); };
     initPop();
     initDraw();
+    initCred();
     window.addEventListener('resize', renderChart);
   }
   // 缩放（滚轮同款）：改可见根数，标签同步

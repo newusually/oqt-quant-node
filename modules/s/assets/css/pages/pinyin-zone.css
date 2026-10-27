@@ -109,3 +109,19 @@ rt { font-size: .52em; color: #e65100; font-family: "PingFang SC", "Microsoft Ya
 .blend-show, .tone-show, .fill-show {
   font-size: 40px; color: #e65100; font-weight: bold; text-align: center; margin: 14px 0;
 }
+
+/* ★2026-10-26 按顺序朗读：当前卡片先高亮成金黄色+显示边框，再念 */
+.sxscard.reading {
+  border-color: #ffc107 !important;
+  background: #fff8e1;
+  box-shadow: 0 0 0 4px rgba(255, 193, 7, .55), 0 10px 22px rgba(224, 168, 61, .3) !important;
+  transform: translateY(-4px) scale(1.06);
+}
+.sxscard.reading .sxs { background: #fff3c4; }
+.sxscard.reading .sxs-letter { color: #e65100; }
+.memcard.reading {
+  border-color: #ffc107 !important;
+  background: #fff8e1;
+  box-shadow: 0 0 0 4px rgba(255, 193, 7, .55) !important;
+  transform: scale(1.05);
+}

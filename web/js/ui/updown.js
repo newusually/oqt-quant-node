@@ -130,6 +130,13 @@
       '规则：下跌占比≥50%连续3次 → 第4次≤20% 买入BTC · 跟随表格分时选项卡 · 仅BTC · 分页可翻历史</small></div>' +
       '<div id="ud-sig-' + UID + '"></div>' +
       '</div>' +
+      /* ★2026-10-26 用户要求：连续上涨/下跌家数 > 100 的区段统计 + BTC 多空关系核实 */
+      '<div class="ud-strwrap">' +
+      '<div class="cd-t" style="margin-bottom:6px">📊 <b id="ud-strgrain-' + UID + '">15分钟</b> 连续涨跌家数统计 · BTC 多空关系核实 <small>' +
+      '连续 N 根 上涨/下跌家数 &gt; 100 之后，做多还是做空更划算（真实K线回测）</small></div>' +
+      '<div id="ud-str-' + UID + '"><div class="sg-note">加载中…</div></div>' +
+      '<div class="tbl-pg" id="ud-spg-' + UID + '" style="padding:8px 4px"></div>' +
+      '</div>' +
       '<div class="cd-note" id="ud-note-' + UID + '"></div>';
 
     s.refs = {
@@ -143,6 +150,9 @@
       ratio: el.querySelector('#ud-ratio-' + UID),
       kcv: el.querySelector('#ud-kcv-' + UID),
       tb: el.querySelector('#ud-tb-' + UID),
+      str: el.querySelector('#ud-str-' + UID),
+      spg: el.querySelector('#ud-spg-' + UID),
+      strgrain: el.querySelector('#ud-strgrain-' + UID),
       note: el.querySelector('#ud-note-' + UID),
       sig: el.querySelector('#ud-sig-' + UID),
       kgrain: el.querySelector('#ud-kgrain-' + UID),
@@ -154,6 +164,15 @@
     s.refs.sec.addEventListener('change', function () { s.sector = s.refs.sec.value; loadAll(); });
     s.refs.lead.addEventListener('change', function () { s.lead = s.refs.lead.value; s.sigs = null; loadAll(); });
     s.refs.refresh.addEventListener('click', function () { loadAll(); });
+    /* ★连续涨跌统计分页 */
+    if (s.refs.spg) s.refs.spg.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      var p = t.getAttribute('data-spage');
+      if (!p) return;
+      s.stpage = parseInt(p, 10) || 1;
+      renderStreak();
+    });
     /* ★K线分时切换（只刷K线） */
     var bar1 = el.querySelector('.tf-grp');
     if (bar1) bar1.addEventListener('click', function (e) {
@@ -233,7 +252,74 @@
       renderT();
       renderSig();
       if (s.refs.tbflabel) s.refs.tbflabel.textContent = tfLabel(s.tgrain);
+      loadStreak();          // ★表格分时切换 → 连续涨跌统计跟着换周期
     }).catch(function () { });
+  }
+
+  /* ★连续涨跌家数 > 阈值 的区段统计（BTC 多空关系核实） */
+  function loadStreak() {
+    var s = st();
+    var g = s.tgrain || s.grain;
+    if (s.refs.strgrain) s.refs.strgrain.textContent = tfLabel(g);
+    if (s.strGrain === g && s.strData && Date.now() - s.strAt < 60000) { renderStreak(); return; }
+    Net.get('/api/boards/streak?grain=' + g + '&thr=100&minLen=2&bars=18000&maxRows=400', { ttl: 60000, timeout: 120000 })
+      .then(function (j) {
+        if (!j || !j.ok) {
+          if (s.refs.str) s.refs.str.innerHTML = '<div class="sg-note">连续统计未就绪：' + esc((j && j.err) || '') + '</div>';
+          return;
+        }
+        s.strData = j; s.strAt = Date.now(); s.strGrain = g; s.stpage = 1;
+        renderStreak();
+      }).catch(function () { });
+  }
+
+  function renderStreak() {
+    var s = st(), j = s.strData;
+    if (!j || !s.refs.str) return;
+    var rows = j.rows || [];
+    var size = 20, pages = Math.max(1, Math.ceil(rows.length / size));
+    var page = Math.max(1, Math.min(pages, s.stpage || 1));
+    var slice = rows.slice((page - 1) * size, (page - 1) * size + size);
+    function nv(x) { return (x === null || x === undefined) ? '-' : x; }
+    function pv(x) { return (x === null || x === undefined) ? '-' : ((x > 0 ? '+' : '') + x.toFixed(2) + '%'); }
+    var h = '';
+    if (j.concl && j.concl.length) {
+      h += '<div class="ud-strconcl">' + j.concl.map(function (c) { return '<div>🔎 ' + esc(c) + '</div>'; }).join('') + '</div>';
+    }
+    var su = (j.summary || {}).up || {}, sd = (j.summary || {}).down || {};
+    function sumRow(name, x) {
+      if (!x.n) return '<tr><td>' + name + '</td><td class="num">0</td><td colspan="7" class="muted">样本不足</td></tr>';
+      var bh = x.byHold || {};
+      return '<tr><td>' + name + '</td><td class="num">' + x.n + '</td>' +
+        '<td class="num">' + nv(x.avgLong) + '</td><td class="num">' + nv(x.avgShort) + '</td>' +
+        '<td class="num">' + nv(x.winLong) + '</td><td class="num">' + nv(x.winShort) + '</td>' +
+        '<td class="num">' + ((bh.h1 && bh.h1.avgLong !== null) ? bh.h1.avgLong : '-') + '</td>' +
+        '<td class="num">' + ((bh.h5 && bh.h5.avgLong !== null) ? bh.h5.avgLong : '-') + '</td>' +
+        '<td class="num">' + ((bh.h10 && bh.h10.avgLong !== null) ? bh.h10.avgLong : '-') + '</td></tr>';
+    }
+    h += '<table class="ud-excel"><thead><tr><th>信号</th><th>段数</th>' +
+      '<th>做多均值%(持3)</th><th>做空均值%(持3)</th><th>做多胜率%</th><th>做空胜率%</th>' +
+      '<th>持1均值%</th><th>持5均值%</th><th>持10均值%</th></tr></thead><tbody>' +
+      sumRow('连续上涨家数&gt;100', su) + sumRow('连续下跌家数&gt;100', sd) + '</tbody></table>';
+    h += '<div class="cd-t" style="margin:10px 0 6px">📋 分时明细（每段结束后的真实走势 · 最新在上）</div>';
+    h += '<table class="ud-excel"><thead><tr><th>结束时间</th><th>信号</th><th>连续根数</th>' +
+      '<th>平均涨家</th><th>平均跌家</th><th>样本</th><th>持1</th><th>持3</th><th>持5</th><th>持10</th>' +
+      '<th>做多</th><th>做空</th></tr></thead><tbody>';
+    slice.forEach(function (r) {
+      var a = r.after || {};
+      var cl = (r.longRet === null || r.longRet === undefined) ? '' : (r.longRet > 0 ? 'num-up' : 'num-dn');
+      var cs = (r.shortRet === null || r.shortRet === undefined) ? '' : (r.shortRet > 0 ? 'num-up' : 'num-dn');
+      h += '<tr><td>' + esc(fmtDT(r.endTs)) + '</td>' +
+        '<td>' + (r.type === 'up' ? '<span class="num-up">连续涨</span>' : '<span class="num-dn">连续跌</span>') + '</td>' +
+        '<td class="num">' + r.len + '</td><td class="num">' + r.upAvg + '</td><td class="num">' + r.downAvg + '</td>' +
+        '<td class="num">' + r.total + '</td>' +
+        '<td class="num">' + pv(a.h1) + '</td><td class="num">' + pv(a.h3) + '</td>' +
+        '<td class="num">' + pv(a.h5) + '</td><td class="num">' + pv(a.h10) + '</td>' +
+        '<td class="' + cl + '">' + pv(r.longRet) + '</td><td class="' + cs + '">' + pv(r.shortRet) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    s.refs.str.innerHTML = h;
+    if (s.refs.spg) s.refs.spg.innerHTML = pageBtns(pages, page, 'spage');
   }
 
   /* BTC信号：六周期一次取回（表格选项卡切换只切换显示面板，不重复请求） */
@@ -250,6 +336,7 @@
     loadK();
     loadT();
     loadSigs(true);
+    loadStreak();
   }
 
   /* ---------------- ① K线区渲染（当前 grain） ---------------- */
@@ -362,6 +449,9 @@
       var chg = (c !== null && pc) ? (c - pc) / pc * 100 : null;
       var amp = (h !== null && lo !== null && pc) ? (h - lo) / pc * 100 : null;
       var hiR = (h !== null && pc) ? (h - pc) / pc * 100 : null;
+      /* ★2026-10-26 用户要求新增两列：最低价 / 最低价跌幅（相对前一根收盘） */
+      var loR = (lo !== null && lo !== undefined && pc) ? (lo - pc) / pc * 100 : null;
+      var loCls = (loR === null) ? '' : (loR >= 0 ? 'num-up' : 'num-dn');
       var o = (ck.o !== null && ck.o !== undefined) ? +ck.o : null;
       var oR = (c !== null && o) ? (c - o) / o * 100 : null;
       function px(v, dg) { return (v === null || v === undefined) ? '-' : v.toFixed(dg || 2); }
@@ -380,11 +470,13 @@
           '<td>' + (rp === null || rp === undefined ? '-' : rp.toFixed(2) + '%') + '</td>' +
           '<td>' + diffTxt + '</td>' +
           '<td class="num-up">' + px(h) + '</td>' +
+          '<td class="num-dn">' + px(lo) + '</td>' +
           '<td class="' + ((c !== null) ? (c >= o ? 'num-up' : 'num-dn') : '') + '"><b>' + px(c) + '</b></td>' +
           '<td class="' + cCls + '">' + pct2(chg) + '</td>' +
           '<td class="num">' + pct2(amp) + '</td>' +
           '<td class="' + hiCls + '">' + pct2(hiR) + '</td>' +
           '<td class="' + oCls + '">' + pct2(oR) + '</td>' +
+          '<td class="' + loCls + '">' + pct2(loR) + '</td>' +
           '</tr>'
       });
     }
@@ -425,8 +517,8 @@
       '<table class="ud-excel"><thead>' +
       '<tr><th>时间</th><th>上涨家数</th><th>下跌家数</th>' +
       '<th>样本</th><th>上涨比例</th><th>差额(涨-跌)</th>' +
-      '<th>最高价(' + esc(s.lead) + ')</th><th>收盘价(' + esc(s.lead) + ')</th>' +
-      '<th>涨幅%</th><th>振幅%</th><th>最高幅度%</th><th>涨跌幅%</th>' +
+      '<th>最高价(' + esc(s.lead) + ')</th><th>最低价(' + esc(s.lead) + ')</th><th>收盘价(' + esc(s.lead) + ')</th>' +
+      '<th>涨幅%</th><th>振幅%</th><th>最高幅度%</th><th>涨跌幅%</th><th>最低价跌幅%</th>' +
       '</tr></thead><tbody>' + html + '</tbody></table>';
     var pg = s.el.querySelector('#ud-tpg-' + UID);
     if (pg) {
