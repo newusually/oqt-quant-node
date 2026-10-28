@@ -251,7 +251,7 @@
    *   只请求「当前页」(TPAGE_SIZE 行)而不是整个 2000 根窗口 → 单次传输 MB 级降到 KB 级。
    *   方向换算: 后端 page 1 = 最早; 本表格"最新在上", UI 页码 1 = 最新
    *             → serverPage = pages - (uiPage - 1)。首屏 pages 未知, 先传 -1 取末页。 */
-  var TPAGE_SIZE = 20;
+  var TPAGE_SIZE = 10;
   function tServerPage(uiPage) {
     var s = st(), pages = s.tPages || 0;
     if (!pages) return -1;
@@ -461,31 +461,34 @@
 
   /* ---------------- ② 详细表格（当前 tgrain · 全量行 · 分页） ---------------- */
   function buildTableRows(j) {
-    var cl = j.leadCandles || [];
-    var barByTs = {};
-    (j.bars || []).forEach(function (x) { if (x.ts) barByTs[x.ts] = x; });
-    var list = cl.slice();
+    /* ★2026-10-28 修复: 表格主轴必须是「本页 bars」(服务端已按页码裁成 20 行, 每行都带涨跌家数),
+     *   而不能是 leadCandles(满窗口 2000 根 K线)。旧实现以 leadCandles 为轴、再去 bars 里按 ts 查家数,
+     *   但本页只回传了 20 行 bars → 2000 行里仅 20 行有家数, 其余(更早的 03:45 等)全显示空白;
+     *   表现为"详细表格只有最新一小段有数、更早全空"且所有周期都如此。
+     *   现改为遍历 bars(本页 20 行, 家数必齐全), 用 ts 去 leadCandles 取 BTC 价(K线图仍用满窗, 不受影响)。 */
+    var clByTs = {};
+    (j.leadCandles || []).forEach(function (x) { if (x.ts) clByTs[x.ts] = x; });
+    var bars = (j.bars || []).slice().sort(function (a, b) { return a.ts - b.ts; });
     var out = [];
-    for (var i = 0; i < list.length; i++) {
-      var ck = list[i];
-      var bi = barByTs[ck.ts] || {};
+    for (var i = 0; i < bars.length; i++) {
+      var bi = bars[i];
+      var ck = clByTs[bi.ts] || null;
       var rp = bi.upRatio;
       var diffTxt = (bi.diff === null || bi.diff === undefined) ? '-' : ((bi.diff > 0 ? '+' : '') + bi.diff);
       var total = bi.total || 0;
-      /* ★2026-10-28: 前收盘优先取服务端下发的 pc(整条序列里的真实前一根),
-       *   否则分页后每页第一行拿不到前收 → 涨幅/振幅/最低跌幅全变 "-" 的假空白 */
-      var pc = (ck.pc !== undefined && ck.pc !== null && isFinite(ck.pc)) ? +ck.pc
-        : ((i > 0 && list[i - 1] && isFinite(list[i - 1].c)) ? list[i - 1].c : null);
-      var c = (ck.c !== null && ck.c !== undefined) ? +ck.c : null;
-      var h = (ck.h !== null && ck.h !== undefined) ? +ck.h : null;
-      var lo = (ck.l !== null && ck.l !== undefined) ? +ck.l : null;
+      /* ★前收盘优先取 K线自带 pc(整条序列真实前一根, 分页安全); 否则本页上一根 bar 的收 */
+      var pc = (ck && ck.pc !== undefined && ck.pc !== null && isFinite(ck.pc)) ? +ck.pc
+        : ((i > 0 && bars[i - 1] && isFinite(bars[i - 1].c)) ? bars[i - 1].c : null);
+      var c = (ck && ck.c !== null && ck.c !== undefined) ? +ck.c : null;
+      var h = (ck && ck.h !== null && ck.h !== undefined) ? +ck.h : null;
+      var lo = (ck && ck.l !== null && ck.l !== undefined) ? +ck.l : null;
       var chg = (c !== null && pc) ? (c - pc) / pc * 100 : null;
       var amp = (h !== null && lo !== null && pc) ? (h - lo) / pc * 100 : null;
       var hiR = (h !== null && pc) ? (h - pc) / pc * 100 : null;
       /* ★2026-10-26 用户要求新增两列：最低价 / 最低价跌幅（相对前一根收盘） */
       var loR = (lo !== null && lo !== undefined && pc) ? (lo - pc) / pc * 100 : null;
       var loCls = (loR === null) ? '' : (loR >= 0 ? 'num-up' : 'num-dn');
-      var o = (ck.o !== null && ck.o !== undefined) ? +ck.o : null;
+      var o = (ck && ck.o !== null && ck.o !== undefined) ? +ck.o : null;
       var oR = (c !== null && o) ? (c - o) / o * 100 : null;
       function px(v, dg) { return (v === null || v === undefined) ? '-' : v.toFixed(dg || 2); }
       function pct2(v) { return (v === null || v === undefined) ? '-' : ((v > 0 ? '+' : '') + v.toFixed(2) + '%'); }
@@ -493,10 +496,10 @@
       var hiCls = (hiR === null) ? '' : (hiR >= 0 ? 'num-up' : 'num-dn');
       var oCls = (oR === null) ? '' : (oR >= 0 ? 'num-up' : 'num-dn');
       out.push({
-        ts: ck.ts,
+        ts: bi.ts,
         html:
           '<tr>' +
-          '<td>' + esc(fmtDT(ck.ts)) + '</td>' +
+          '<td>' + esc(fmtDT(bi.ts)) + '</td>' +
           '<td>' + (bi.up === null || bi.up === undefined ? '-' : bi.up) + '</td>' +
           '<td>' + (bi.down === null || bi.down === undefined ? '-' : bi.down) + '</td>' +
           '<td>' + total + '</td>' +
