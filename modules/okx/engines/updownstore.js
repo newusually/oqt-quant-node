@@ -138,7 +138,15 @@ async function build(grain, opt) {
     try {
       const r = db().prepare('SELECT MAX(ts) AS m, COUNT(*) AS c FROM updown WHERE grain=?').get(gg);
       if (r && r.c > 0 && r.m) {
-        since = r.m - 2 * (GM[gg] || 900000);       // 回算 2 根: 边界行的样本数会随"新合约补齐历史"变化
+        /* ★2026-10-28 愈合窗口: 重算覆盖「整个显示窗口」(≤2000 根, 封顶 60 天),
+         *   而非仅落后 2 根 —— 修复回填中途被冻结的低覆盖空洞。
+         *   先前 since=max-2*GM, 一旦某段(如 15m 的 20:45)落在窗口外就永不再重算,
+         *   导致 20:00(满287)→20:45(仅35)→22:15(满287) 出现永久低覆盖空洞,
+         *   表现为"最近一段记录缺失很大一段显示不出来"。
+         *   放宽到 2000 根(显示上限) 后, 重建会重扫该窗口内的 K线,
+         *   底层 K线(BTC/ETH 等在 20:45 确有数据) 即被重新聚合 → 空洞愈合。 */
+        const BEAM = Math.min(2000 * (GM[gg] || 900000), 60 * 86400000);
+        since = r.m - BEAM;
         if (Date.now() - since > 86400000 * 70) since = 0;   // 断太久 → 全量(增量窗口已越过 3 个月分片窗口)
       }
     } catch (e) { since = 0; }

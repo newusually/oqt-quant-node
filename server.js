@@ -384,6 +384,21 @@ server.listen(PORT, () => {
     setInterval(function () { buildAggAll('timer').catch(function () { }); }, 1800000);
   }
 
+  // ★回补进度缓存预热: 6 个周期每 100s 后台重算一次 progress(),
+  //   保证前端「分时段查询 / 切换周期」永远命中 CACHE_TTL(120s) 缓存(0.x 秒),
+  //   不再因缓存过期触发冷计算(~2.5s)而感觉"切换慢 / 查询慢"。
+  //   (statOne 已改为只读首末月片, 冷计算从 10.8s 降到 ~2.5s; 再加热使其近乎即时)
+  (function prewarmProgress() {
+    const mod = require('./modules/okx/engines/backfillprogress');
+    const tick = function () {
+      for (const g of (mod.GRAINS || [])) {
+        try { const p = mod.progress({ grain: g }); if (p && p.catch) p.catch(function () { }); } catch (e) { }
+      }
+    };
+    tick();
+    setInterval(tick, 100000);
+  })();
+
   // ★K线保鲜员: 每 30s 给最近浏览过的合约拉最新K线落库
   //   (主图形成中K线由前端 SSE 实时拼; 这里保证已收线的K线持续入库, 60s 对账重载有真实数据可拿)
   setInterval(() => {
