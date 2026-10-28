@@ -355,13 +355,14 @@ server.listen(PORT, () => {
   {
     const AGG_GRAINS = ['15m', '1h', '2h', '4h', '5m', '3m'];
     let aggBuilding = false;
-    async function buildAggAll(tag) {
+    async function buildAggAll(tag, grains) {
       if (aggBuilding) { console.log('[agg] 上一轮仍在构建, 跳过(' + tag + ')'); return; }
       aggBuilding = true;
       const t0 = Date.now();
       try {
         const UDST = require('./modules/okx/engines/updownstore');
-        for (const g of AGG_GRAINS) {
+        const list = (grains && grains.length) ? grains : AGG_GRAINS;
+        for (const g of list) {
           try {
             const r = await UDST.build(g);
             if (r && r.ok) {
@@ -375,13 +376,18 @@ server.listen(PORT, () => {
           }
           await new Promise(r => setTimeout(r, 5000));   // 周期间隔, 别把 IO 打满
         }
-        console.log('[agg] 全周期构建结束, 总耗时 ' + Math.round((Date.now() - t0) / 1000) + 's (' + tag + ')');
+        console.log('[agg] 构建结束(' + ((grains && grains.length) ? '部分:' + grains.join('/') : '全量') + '), 总耗时 ' + Math.round((Date.now() - t0) / 1000) + 's (' + tag + ')');
       } finally {
         aggBuilding = false;
       }
     }
     setTimeout(function () { buildAggAll('boot').catch(function () { }); }, 300000);
-    setInterval(function () { buildAggAll('timer').catch(function () { }); }, 1800000);
+    // ★2026-10-28: 短周期(3m/5m/15m)每5分钟重建, 满足"5分钟内补完"需求(长周期变化慢, 走低频省IO)
+    setTimeout(function () {
+      setInterval(function () { buildAggAll('fast', ['3m', '5m', '15m']).catch(function () { }); }, 300000);
+    }, 350000);
+    // 长周期(1h/2h/4h)保持30分钟, 变化慢且省IO
+    setInterval(function () { buildAggAll('slow', ['1h', '2h', '4h']).catch(function () { }); }, 1800000);
   }
 
   // ★回补进度缓存预热: 6 个周期每 100s 后台重算一次 progress(),
