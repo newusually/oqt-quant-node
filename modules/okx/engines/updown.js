@@ -292,9 +292,12 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
   if (arr.length >= 10) {
     /* 注意: 此处 arr 元素是原始聚合对象(字段 n), out 映射后才有 total */
     const cnt = b => (b.n !== undefined && b.n !== null) ? b.n : (b.total || 0);
-    const sorted = arr.map(cnt).sort((a, b) => a - b);
-    const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
-    const minN = Math.max(2, Math.ceil(p90 * 0.6));
+    /* ★2026-10-28 修正: 原阈值 minN=p90*0.6≈172 会把"覆盖未涨满"的近期 bar
+     *   (3m 末=29 / 5m 末=64 / 1h 末=95, 均远低于 172) 从尾部连续剔除 →
+     *   最近 12 小时涨跌家数在详细表格里整段空白(用户实测"最近12h没有数据")。
+     *   现仅剔除"几乎为空"的尾部碎片(覆盖 < 3 合约 = 真空隙/回填断点),
+     *   保留虽有部分缺口但已有真实数据的近期 bar —— 用户要求看到最新涨跌家数。 */
+    const minN = 3;
     let cut = arr.length;
     while (cut > 0 && cnt(arr[cut - 1]) < minN) cut--;
     if (cut < arr.length) arr = arr.slice(0, cut);
