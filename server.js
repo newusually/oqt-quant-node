@@ -125,6 +125,38 @@ function handleOkxStream(req, res) {
   });
 }
 
+// ★实时涨跌家数 SSE: /api/okx/updown-live?grain=5m —— 每秒推送「当前形成中bar + 前一根」
+//   前端详细表格顶 2 行据此秒级刷新(其余历史行走预聚合)。复用 stream 的 SSE 头与探活。
+function handleUpdownLive(req, res) {
+  const q = url.parse(req.url, true).query;
+  const grain = (q.grain || '5m');
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Access-Control-Allow-Origin': '*'
+  });
+  res.write(': ok\n\n');
+  let mod = null;
+  try { mod = require('./modules/okx/engines/liveupdown'); } catch (e) {
+    res.write('data: ' + JSON.stringify({ ok: false, err: String(e.message || e) }) + '\n\n');
+    res.end();
+    return;
+  }
+  mod.ensureStarted();
+  const send = function (tip) { try { res.write('data: ' + JSON.stringify(tip) + '\n\n'); } catch (e) { } };
+  // 立即推一次(若已有缓存 tip)
+  const init = mod.tip(grain);
+  if (init) send(init);
+  const unsub = mod.subscribe(grain, send);
+  const hb = setInterval(function () { try { res.write(': hb\n\n'); } catch (e) { } }, 20000);
+  req.on('close', function () {
+    clearInterval(hb);
+    try { unsub(); } catch (e) { }
+  });
+}
+
 // 静态服务黑名单：后端目录/敏感文件禁止通过 HTTP 直接访问（数据、配置、源码、凭证）
 // ★2026-10-24 修 s 模块白屏: 原实现用 indexOf 子串匹配, 把 /modules/s/assets/js/core/config.js
 //   与 /modules/s/data/ 也拦成 403 → Vue 起不来 → 白屏。
@@ -262,6 +294,11 @@ const server = http.createServer((req, res) => {
   // ★毫秒级行情 SSE(OKX 公共WS 增量)
   if (p === '/api/okx/stream') {
     handleOkxStream(req, res);
+    return;
+  }
+  // ★实时涨跌家数 SSE(当前形成中bar + 前一根, WS 秒级)
+  if (p === '/api/okx/updown-live') {
+    handleUpdownLive(req, res);
     return;
   }
   // API 路由

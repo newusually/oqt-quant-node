@@ -140,11 +140,23 @@ function pageSlice(res, rqPage, rqSize) {
   const all = res.bars || [];
   const total = all.length;
   const pages = Math.max(1, Math.ceil(total / rqSize));
-  let p = rqPage < 0 ? pages + rqPage + 1 : rqPage;
-  if (p < 1) p = 1;
-  if (p > pages) p = pages;
-  const s = (p - 1) * rqSize;
-  res.bars = all.slice(s, s + rqSize);          // 仅表格行分页
+  let p, start, end;
+  if (rqPage < 0) {
+    /* ★2026-10-28 修复: 「最新窗口」(page<0) 直接取末尾 rqSize 行,
+     *   不再按固定页对齐 —— 否则当 total 不是 rqSize 整数倍时(如 2001 行/页10),
+     *   末页只剩 1 行, 表现为"详细表格只有一行"(3m/15m 均踩中, 默认 tgrain=15m)。
+     *   p 记为最后一页(UI 页码=pages), 翻页器据此正确显示。 */
+    start = Math.max(0, total - rqSize);
+    end = total;
+    p = pages;
+  } else {
+    p = rqPage;
+    if (p < 1) p = 1;
+    if (p > pages) p = pages;
+    start = (p - 1) * rqSize;
+    end = start + rqSize;
+  }
+  res.bars = all.slice(start, end);            // 仅表格行分页
   /* ★leadCandles 不裁: K线需要满窗口, 由前端按 s.bars 自行 slice */
   res.pageInfo = { page: p, pageSize: rqSize, total: total, pages: pages, hasPrev: p > 1, hasNext: p < pages };
   return res;

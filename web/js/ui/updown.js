@@ -460,12 +460,47 @@
   }
 
   /* ---------------- ② 详细表格（当前 tgrain · 全量行 · 分页） ---------------- */
+  /* ★单行单元格（涨/跌/平家数 + BTC 列 + 涨跌幅等）。
+   *   bi = {ts,up,down,flat,total,upRatio,diff}; ck = {o,h,l,c,pc}(BTC K线, pc=前收) */
+  function rowCells(bi, ck) {
+    var rp = bi.upRatio;
+    var diffTxt = (bi.diff === null || bi.diff === undefined) ? '-' : ((bi.diff > 0 ? '+' : '') + bi.diff);
+    var total = bi.total || 0;
+    var pc = (ck && ck.pc !== undefined && ck.pc !== null && isFinite(ck.pc)) ? +ck.pc : null;
+    var c = (ck && ck.c !== null && ck.c !== undefined) ? +ck.c : null;
+    var h = (ck && ck.h !== null && ck.h !== undefined) ? +ck.h : null;
+    var lo = (ck && ck.l !== null && ck.l !== undefined) ? +ck.l : null;
+    var o = (ck && ck.o !== null && ck.o !== undefined) ? +ck.o : null;
+    var chg = (c !== null && pc) ? (c - pc) / pc * 100 : null;
+    var amp = (h !== null && lo !== null && pc) ? (h - lo) / pc * 100 : null;
+    var hiR = (h !== null && pc) ? (h - pc) / pc * 100 : null;
+    var loR = (lo !== null && lo !== undefined && pc) ? (lo - pc) / pc * 100 : null;
+    var oR = (c !== null && o) ? (c - o) / o * 100 : null;
+    function px(v, dg) { return (v === null || v === undefined) ? '-' : v.toFixed(dg || 2); }
+    function pct2(v) { return (v === null || v === undefined) ? '-' : ((v > 0 ? '+' : '') + v.toFixed(2) + '%'); }
+    var cCls = (chg === null) ? '' : (chg >= 0 ? 'num-up' : 'num-dn');
+    var hiCls = (hiR === null) ? '' : (hiR >= 0 ? 'num-up' : 'num-dn');
+    var oCls = (oR === null) ? '' : (oR >= 0 ? 'num-up' : 'num-dn');
+    var loCls = (loR === null) ? '' : (loR >= 0 ? 'num-up' : 'num-dn');
+    return '<td>' + esc(fmtDT(bi.ts)) + '</td>' +
+      '<td>' + (bi.up === null || bi.up === undefined ? '-' : bi.up) + '</td>' +
+      '<td>' + (bi.down === null || bi.down === undefined ? '-' : bi.down) + '</td>' +
+      '<td>' + total + '</td>' +
+      '<td>' + (rp === null || rp === undefined ? '-' : rp.toFixed(2) + '%') + '</td>' +
+      '<td>' + diffTxt + '</td>' +
+      '<td class="num-up">' + px(h) + '</td>' +
+      '<td class="num-dn">' + px(lo) + '</td>' +
+      '<td class="' + ((c !== null) ? (c >= o ? 'num-up' : 'num-dn') : '') + '"><b>' + px(c) + '</b></td>' +
+      '<td class="' + cCls + '">' + pct2(chg) + '</td>' +
+      '<td class="num">' + pct2(amp) + '</td>' +
+      '<td class="' + hiCls + '">' + pct2(hiR) + '</td>' +
+      '<td class="' + oCls + '">' + pct2(oR) + '</td>' +
+      '<td class="' + loCls + '">' + pct2(loR) + '</td>';
+  }
+
   function buildTableRows(j) {
-    /* ★2026-10-28 修复: 表格主轴必须是「本页 bars」(服务端已按页码裁成 20 行, 每行都带涨跌家数),
-     *   而不能是 leadCandles(满窗口 2000 根 K线)。旧实现以 leadCandles 为轴、再去 bars 里按 ts 查家数,
-     *   但本页只回传了 20 行 bars → 2000 行里仅 20 行有家数, 其余(更早的 03:45 等)全显示空白;
-     *   表现为"详细表格只有最新一小段有数、更早全空"且所有周期都如此。
-     *   现改为遍历 bars(本页 20 行, 家数必齐全), 用 ts 去 leadCandles 取 BTC 价(K线图仍用满窗, 不受影响)。 */
+    /* ★表格主轴必须是「本页 bars」(服务端已按页码裁好, 每行都带涨跌家数),
+     *   用 ts 去 leadCandles 取 BTC 价(K线图仍用满窗, 不受影响)。 */
     var clByTs = {};
     (j.leadCandles || []).forEach(function (x) { if (x.ts) clByTs[x.ts] = x; });
     var bars = (j.bars || []).slice().sort(function (a, b) { return a.ts - b.ts; });
@@ -473,51 +508,72 @@
     for (var i = 0; i < bars.length; i++) {
       var bi = bars[i];
       var ck = clByTs[bi.ts] || null;
-      var rp = bi.upRatio;
-      var diffTxt = (bi.diff === null || bi.diff === undefined) ? '-' : ((bi.diff > 0 ? '+' : '') + bi.diff);
-      var total = bi.total || 0;
       /* ★前收盘优先取 K线自带 pc(整条序列真实前一根, 分页安全); 否则本页上一根 bar 的收 */
-      var pc = (ck && ck.pc !== undefined && ck.pc !== null && isFinite(ck.pc)) ? +ck.pc
-        : ((i > 0 && bars[i - 1] && isFinite(bars[i - 1].c)) ? bars[i - 1].c : null);
-      var c = (ck && ck.c !== null && ck.c !== undefined) ? +ck.c : null;
-      var h = (ck && ck.h !== null && ck.h !== undefined) ? +ck.h : null;
-      var lo = (ck && ck.l !== null && ck.l !== undefined) ? +ck.l : null;
-      var chg = (c !== null && pc) ? (c - pc) / pc * 100 : null;
-      var amp = (h !== null && lo !== null && pc) ? (h - lo) / pc * 100 : null;
-      var hiR = (h !== null && pc) ? (h - pc) / pc * 100 : null;
-      /* ★2026-10-26 用户要求新增两列：最低价 / 最低价跌幅（相对前一根收盘） */
-      var loR = (lo !== null && lo !== undefined && pc) ? (lo - pc) / pc * 100 : null;
-      var loCls = (loR === null) ? '' : (loR >= 0 ? 'num-up' : 'num-dn');
-      var o = (ck && ck.o !== null && ck.o !== undefined) ? +ck.o : null;
-      var oR = (c !== null && o) ? (c - o) / o * 100 : null;
-      function px(v, dg) { return (v === null || v === undefined) ? '-' : v.toFixed(dg || 2); }
-      function pct2(v) { return (v === null || v === undefined) ? '-' : ((v > 0 ? '+' : '') + v.toFixed(2) + '%'); }
-      var cCls = (chg === null) ? '' : (chg >= 0 ? 'num-up' : 'num-dn');
-      var hiCls = (hiR === null) ? '' : (hiR >= 0 ? 'num-up' : 'num-dn');
-      var oCls = (oR === null) ? '' : (oR >= 0 ? 'num-up' : 'num-dn');
-      out.push({
-        ts: bi.ts,
-        html:
-          '<tr>' +
-          '<td>' + esc(fmtDT(bi.ts)) + '</td>' +
-          '<td>' + (bi.up === null || bi.up === undefined ? '-' : bi.up) + '</td>' +
-          '<td>' + (bi.down === null || bi.down === undefined ? '-' : bi.down) + '</td>' +
-          '<td>' + total + '</td>' +
-          '<td>' + (rp === null || rp === undefined ? '-' : rp.toFixed(2) + '%') + '</td>' +
-          '<td>' + diffTxt + '</td>' +
-          '<td class="num-up">' + px(h) + '</td>' +
-          '<td class="num-dn">' + px(lo) + '</td>' +
-          '<td class="' + ((c !== null) ? (c >= o ? 'num-up' : 'num-dn') : '') + '"><b>' + px(c) + '</b></td>' +
-          '<td class="' + cCls + '">' + pct2(chg) + '</td>' +
-          '<td class="num">' + pct2(amp) + '</td>' +
-          '<td class="' + hiCls + '">' + pct2(hiR) + '</td>' +
-          '<td class="' + oCls + '">' + pct2(oR) + '</td>' +
-          '<td class="' + loCls + '">' + pct2(loR) + '</td>' +
-          '</tr>'
-      });
+      if (ck && (ck.pc === undefined || ck.pc === null || !isFinite(ck.pc)) && i > 0 && bars[i - 1] && isFinite(bars[i - 1].c)) ck = Object.assign({}, ck, { pc: bars[i - 1].c });
+      out.push({ ts: bi.ts, html: '<tr>' + rowCells(bi, ck) + '</tr>' });
     }
     out.reverse();          // 最新在上
     return out;
+  }
+
+  /* ★2026-10-28 WS 实时涨跌家数: 详细表格的【当前形成中bar + 前一根】走 SSE 秒级刷新。
+   *   其余历史行不变。仅当浏览器支持 EventSource 时启用; 断线由浏览器自动重连。 */
+  var liveES = null, liveGrain = null;
+  function openLive(grain) {
+    if (liveGrain === grain && liveES) return;          // 同周期无需重连
+    if (liveES) { try { liveES.close(); } catch (e) { } liveES = null; }
+    liveGrain = grain;
+    if (!global.EventSource) return;
+    try {
+      liveES = new EventSource('/api/okx/updown-live?grain=' + encodeURIComponent(grain));
+      liveES.onmessage = function (ev) {
+        try { var j = JSON.parse(ev.data); if (j && j.grain === liveGrain) patchLiveTip(j); } catch (e) { }
+      };
+      liveES.onerror = function () { /* 自动重连, 无需处理 */ };
+    } catch (e) { }
+  }
+  function updateStat(k, v, cls) {
+    var s = st(); if (!s.refs.stats) return;
+    var els = s.refs.stats.querySelectorAll('.md-stat');
+    for (var i = 0; i < els.length; i++) {
+      var sp = els[i].querySelector('span'); var b = els[i].querySelector('b');
+      if (sp && b && sp.textContent === k) { b.textContent = v; if (cls) b.className = cls; break; }
+    }
+  }
+  function patchLiveTip(j) {
+    var s = st(); if (!s.refs.tb) return;
+    /* 仅当当前正处于「最新窗口」(未回溯历史) 才覆盖顶行, 否则会和翻页冲突 */
+    if (s.tBefore) return;
+    var tb = s.refs.tb.querySelector('table.ud-excel'); if (!tb) return;
+    var tbody = tb.querySelector('tbody'); if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    if (!j.cur || j.cur.n < 30) return;                 // WS 未就绪(快照启动/重连中) 不覆盖
+    /* ★顶行 = 当前形成中 bar(实时, 含 BTC 实时价) */
+    var cur = j.cur, btc = cur.lead || null;
+    var ck = btc ? { o: btc.o, h: btc.h, l: btc.l, c: btc.c, pc: btc.o } : null;
+    var curBi = { ts: cur.ts, up: cur.up, down: cur.down, total: cur.total, upRatio: cur.upRatio, diff: cur.diff };
+    if (rows[0]) rows[0].innerHTML = rowCells(curBi, ck);
+    /* ★第二行 = 前一根已收盘 bar(家数类实时刷新, BTC 列保留 HTTP 原值) */
+    if (j.prev && rows[1]) {
+      var pv = j.prev, pvBi = { ts: pv.ts, up: pv.up, down: pv.down, total: pv.total, upRatio: pv.upRatio, diff: pv.diff };
+      var cells = rows[1].children;
+      if (cells.length >= 6) {
+        cells[0].textContent = fmtDT(pvBi.ts);
+        cells[1].textContent = (pvBi.up === null || pvBi.up === undefined) ? '-' : pvBi.up;
+        cells[2].textContent = (pvBi.down === null || pvBi.down === undefined) ? '-' : pvBi.down;
+        cells[3].textContent = pvBi.total || 0;
+        cells[4].textContent = (pvBi.upRatio === null || pvBi.upRatio === undefined) ? '-' : pvBi.upRatio.toFixed(2) + '%';
+        cells[5].textContent = ((pvBi.diff > 0 ? '+' : '') + pvBi.diff);
+      }
+    }
+    /* ★顶部统计条: 最新家数/比例/差额 + 主力涨幅 同步刷(让"当前比例"秒级跳动) */
+    if (s.refs.stats) {
+      updateStat('上涨家数', cur.up);
+      updateStat('下跌家数', cur.down);
+      updateStat('当前比例', (cur.upRatio === null || cur.upRatio === undefined) ? '-' : cur.upRatio.toFixed(1) + '%', cur.upRatio >= 50 ? 'up' : 'dn');
+      updateStat('差额', (cur.diff > 0 ? '+' : '') + cur.diff, bias(cur.diff));
+      if (btc) updateStat(s.lead + ' 涨幅', (btc.chg > 0 ? '+' : '') + btc.chg.toFixed(3) + '%', btc.chg > 0 ? 'up' : (btc.chg < 0 ? 'dn' : 'flat'));
+    }
   }
 
   /* ★分页按钮条（详细表格 / 信号回测共用；用户: 没有分页按钮看不到历史） */
@@ -539,6 +595,7 @@
   function renderT() {
     var s = st(), j = s.tdata;
     if (!j || !s.refs.tb) return;
+    openLive(s.tgrain);            // ★打开/保持 当前分时 的 WS 实时连接(顶 2 行秒级刷新)
     var rows = buildTableRows(j);
     /* ★服务端已裁好页 → rows 直接是本页内容(通常 20 行), 不再本地切一刀。
      *   兜底: 万一没拿到 pageInfo(后端未分页), 本地限制在 100 行内防止一次性渲染几千行。 */
