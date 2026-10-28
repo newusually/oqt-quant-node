@@ -439,6 +439,37 @@
         ctx.restore();
       }
     }
+    // ★缠论大级别转折连线(2026-10-28): opts.links = [{t0,p0,t1,p1,dir,dash}]
+    //   dir=+1(底→顶, 先买后卖, 涨)红 / dir=-1(顶→底, 先卖后买, 跌)绿 —— 涨红跌绿
+    //   端点按全局时间二分定位, 超出窗口的端点线性外推到图边(视口裁剪)
+    {
+      const LK = opts.links || [];
+      if (LK.length && all.length > 1) {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(P.l, P.t, W - P.l - P.r, mainH); ctx.clip();
+        ctx.lineWidth = 2; ctx.setLineDash([]);
+        const giOf = (t) => {
+          let lo2 = 0, hi2 = all.length - 1, gi = -1;
+          while (lo2 <= hi2) { const mid = (lo2 + hi2) >> 1; if (all[mid].t <= t) { gi = mid; lo2 = mid + 1; } else hi2 = mid - 1; }
+          return gi;
+        };
+        for (const L of LK) {
+          const g0 = giOf(L.t0), g1 = giOf(L.t1);
+          if (g0 < 0 || g1 < 0) continue;
+          const x0 = x(g0 - startI), x1 = x(g1 - startI);
+          if (!isFinite(x0) || !isFinite(x1)) continue;
+          ctx.strokeStyle = (L.dir || 0) > 0 ? '#f0334b' : '#0bbf7a';
+          if (L.dash) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(x0, y(L.p0)); ctx.lineTo(x1, y(L.p1)); ctx.stroke();
+          /* 端点圆点 */
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath(); ctx.arc(x0, y(L.p0), 2.6, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(x1, y(L.p1), 2.6, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
     const marks = [];
     (opts.marks || []).forEach(m => marks.push(m));
     // ★2026-10-24 用户要求「其他买卖信号全部删除」:

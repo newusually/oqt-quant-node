@@ -386,6 +386,42 @@ async function handle(ep, q) {
       }
     }
 
+    /* ★★★缠论·大级别转折点回测（2026-10-28 新共享信号, 取代 buysignal 成为K线+回测唯一信号源）
+     *   "用缠论写出大范围转折底部和顶部的买卖点…底部和顶部连接最少40-100根K线,
+     *    连接在一起涨跌幅≥10%…底部是买, 顶部是卖…没有预测功能, 直接划线得来"
+     *   参数: grain(分时) days(默认730≈两年) minBars(40~100, 默认40) minAmp(默认10) mode(pct/atr) */
+    case 'chan': {
+      try {
+        const CH = require('../modules/okx/engines/chan');
+        return await CH.analyze({
+          grain: q.grain || '5m',
+          days: int(q.days, 730),
+          minBars: int(q.minBars, 40),
+          minAmp: parseFloat(q.minAmp) || 10,
+          mode: q.mode || 'pct'
+        });
+      } catch (e) {
+        return { ok: false, err: String((e && e.message) || e), signals: [] };
+      }
+    }
+
+    /* ★缠论单段明细: 某信号之前那条连线区间的逐根K线涨跌家数比例序列（懒加载） */
+    case 'chan-seq': {
+      try {
+        const CH = require('../modules/okx/engines/chan');
+        return await CH.seq({
+          grain: q.grain || '5m',
+          days: int(q.days, 730),
+          minBars: int(q.minBars, 40),
+          minAmp: parseFloat(q.minAmp) || 10,
+          mode: q.mode || 'pct',
+          ts: int(q.ts, 0)
+        });
+      } catch (e) {
+        return { ok: false, err: String((e && e.message) || e), rows: [] };
+      }
+    }
+
     default: return { ok: false, err: 'unknown boards ep ' + ep };
   }
 }

@@ -40,12 +40,32 @@ function ensureSources() {
    *   这里不主动调用 okxws.start() 以免在无人看图时触发 287 合约订阅风暴。 */
   if (_WSF && typeof _WSF.connect === 'function') { try { _WSF.connect(); } catch (e) { } }
 }
+/* REST 全市场实时价兜底(当 wsfeed/ws 未就绪/未订阅时, 保证实时涨跌计数仍有价可数)。
+ * realtime.tickers() 是 OKX 公开 REST(/api/v5/market/tickers?instType=SWAP), 自带 3s 缓存,
+ * 返回全部 USDT 永续的 last; 这里再叠 2s 本地缓存, 每秒刷新几乎零额外开销。 */
+let _restMap = null, _restAt = 0;
+async function restMap() {
+  if (_restMap && Date.now() - _restAt < 2000) return _restMap;
+  try {
+    const rt = require('./realtime');
+    const t = await rt.tickers();
+    if (t && t.ok && t.list && t.list.length) {
+      const m = {};
+      for (const x of t.list) { const v = +x.last; if (x.instId && isFinite(v) && v > 0) m[x.instId] = v; }
+      if (Object.keys(m).length) { _restMap = m; _restAt = Date.now(); return m; }
+    }
+  } catch (e) { }
+  return _restMap || {};
+}
+
 function livePx(id) {
   ensureSources();
+  // 1) okxws(页面活跃时的秒级源, 最新鲜)
   if (_WS && typeof _WS.snap === 'function') {
     const t = _WS.snap(id);
     if (t && isFinite(t.px) && t.px > 0) return t.px;
   }
+  // 2) wsfeed(公开 250 ticker; 若已订阅则有值)
   if (_WSF && typeof _WSF.snapshot === 'function') {
     if (!_wsfMap || Date.now() - _wsfAt > 30000) {
       _wsfMap = {}; _wsfAt = Date.now();
@@ -56,6 +76,8 @@ function livePx(id) {
     }
     if (_wsfMap[id]) return _wsfMap[id];
   }
+  // 3) REST 兜底(全市场实时价, 保证不空)
+  if (_restMap && _restMap[id]) return _restMap[id];
   return null;
 }
 
@@ -98,6 +120,7 @@ function computeCur(grain, list, lastClose) {
   }
   a.upRatio = a.n ? +(a.up / a.n * 100).toFixed(2) : 0;
   a.diff = a.up - a.down;
+  a.total = a.n;            // ★SSE 顶行"样本"列需要 total, 否则顶行样本显示空白
   return a;
 }
 
@@ -112,32 +135,82 @@ function btcCandle(grain, list, lastClose) {
   return { o: o, h: h, l: l, c: c, chg: (c - o) / o * 100 };
 }
 
-/* 前一根已收盘 bar：预聚合库最后一条 */
-function computePrev(grain) {
+/* 用已落库 K线重算指定片(给 SSE「前一根」用, 避免其样本数偏低) */
+async function recomputeBarLive(grain, list, barTs) {
+  const GM = GRAIN_MS[grain] || 900000;
+  const prevTs = barTs - GM;
+  const a = { ts: barTs, up: 0, down: 0, flat: 0, n: 0 };
+  for (const x of list) {
+    try {
+      const chain = KS.readChain(grain, x.instId, 0, 1);
+      if (!chain.length) continue;
+      const db = KS.roOpen(chain[0]);
+      if (!db) continue;
+      const rT = db.prepare('SELECT c FROM kline WHERE ts=?').get(barTs);
+      const rP = db.prepare('SELECT c FROM kline WHERE ts=?').get(prevTs);
+      const cT = (rT && rT.c !== undefined && isFinite(rT.c) && rT.c > 0) ? rT.c : null;
+      const cP = (rP && rP.c !== undefined && isFinite(rP.c) && rP.c > 0) ? rP.c : null;
+      if (!cT || !cP) continue;
+      const pct = (cT - cP) / cP;
+      a.n++;
+      if (pct > 0) a.up++; else { a.down++; if (pct === 0) a.flat++; }
+    } catch (e) { }
+  }
+  if (a.n < Math.max(20, Math.floor(list.length * 0.1))) return null;
+  return a;
+}
+
+/* ★2026-10-28 修复「顶行出现两个相同时间戳(重复/延迟)」:
+ *   前一根必须固定取「当前形成中 bar 的前一根」= curTs - GM。
+ *   旧实现取预聚合库「最后一条」, 而最后一条往往就是正在形成中的当前 bar(其 open-ts 与 cur.ts 相同)
+ *   → prev.ts 与 cur.ts 撞车, patchLiveTip 把表格顶两行都写成同一个时间(用户看到的"两个25分/重复行")。
+ *   改为按 cur.ts - GM 精确取前收片, 从根本上消除撞车。 */
+async function computePrev(grain, curTs) {
+  const GM = GRAIN_MS[grain] || 900000;
+  const prevTs = (curTs || Math.floor(Date.now() / GM) * GM) - GM;
+  let base = null;
   try {
     const ST = require('./updownstore');
     const m = ST.agg(grain, null);
     if (m && m.size) {
-      const arr = Array.from(m.values());
-      const e = arr[arr.length - 1];
-      if (e) return {
-        ts: e.ts, up: e.up, down: e.down, flat: e.flat, total: e.n,
-        upRatio: e.n ? +(e.up / e.n * 100).toFixed(2) : 0,
-        diff: e.up - e.down
-      };
+      let total = 287;
+      try { const u = await I.universe(); if (u && u.list) total = u.list.length; } catch (e) { }
+      const minN = Math.max(20, Math.floor(total * 0.1));
+      const b = m.get(prevTs);
+      if (b && b.n >= minN) base = b;        // 精确取前收片, 不回退到最后一条
     }
   } catch (e) { }
-  return null;
+  /* 预聚合库缺失/覆盖偏低 → 用已落库 K线直接重算该前收片(满覆盖) */
+  try {
+    const u = await I.universe();
+    if (u && u.list) {
+      const hb = await recomputeBarLive(grain, u.list, prevTs);
+      if (hb && hb.n > 0 && (!base || hb.n >= base.n)) {
+        return {
+          ts: hb.ts, up: hb.up, down: hb.down, flat: hb.flat, total: hb.n,
+          upRatio: hb.n ? +(hb.up / hb.n * 100).toFixed(2) : 0,
+          diff: hb.up - hb.down
+        };
+      }
+    }
+  } catch (e) { }
+  if (!base) return null;
+  return {
+    ts: base.ts, up: base.up, down: base.down, flat: base.flat, total: base.n,
+    upRatio: base.n ? +(base.up / base.n * 100).toFixed(2) : 0,
+    diff: base.up - base.down
+  };
 }
 
 async function computeOne(grain) {
   const u = await I.universe();
   if (!u || !u.ok || !u.list || !u.list.length) return null;
   const list = u.list;
+  await restMap();                              // 预热 REST 实时价兜底(若 wsfeed/ws 未就绪)
   const lastClose = await getLastClose(grain);
   const cur = computeCur(grain, list, lastClose);
   const btc = btcCandle(grain, list, lastClose);
-  const prev = computePrev(grain);
+  const prev = await computePrev(grain, cur.ts);
   const minN = Math.max(2, Math.floor(list.length * 0.3));
   if (cur.n < minN) return null;      // WS 未就绪(快照刚启动/重连中) → 不推送残缺统计
   const tip = { grain: grain, at: Date.now(), cur: Object.assign({ lead: btc }, cur), prev: prev };

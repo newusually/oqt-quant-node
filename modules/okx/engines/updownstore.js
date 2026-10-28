@@ -123,6 +123,11 @@ async function build(grain, opt) {
   if (!u.ok || !u.list) return { ok: false, err: 'universe 未就绪' };
   const list = u.list;
   const gg = grain || '1h';
+  /* ★2026-10-28 修复「最近记录总有 0 / 空白」: 进行中/回填滞后的片只聚合到 5/287 等极低
+   *   覆盖(实测 3m 末 03:45~03:54 连续 n=5), 写入预聚合库后会被当作真实口径显示成 0/空白,
+   *   且会成为 SSE「前一根」基准(顶行第二格显示 0)。低于该阈值的片不写入, 留待下个周期
+   *   重建时(覆盖已愈合)再落库 —— 与 calc() 的窗口过滤双重兜底。 */
+  const minWriteN = Math.max(10, Math.floor(list.length * 0.05));
   const aggMap = new Map();
   let cov = 0, rows = 0, processed = 0;
   const t0 = Date.now();
@@ -222,6 +227,7 @@ async function build(grain, opt) {
     const end = Math.min(arr.length, i + CHUNK);
     for (let k = i; k < end; k++) {
       const a = arr[k];
+      if (a.n < minWriteN) continue;   // ★跳过「进行中/回填滞后」极低覆盖片(如 n=5), 不写入预聚合库
       ins.run(gg, a.ts, a.up, a.down, a.flat, a.n);
       if (a.worst) ins2.run(a.worst.pct, a.worst.px, a.worst.inst, gg, a.ts);
     }

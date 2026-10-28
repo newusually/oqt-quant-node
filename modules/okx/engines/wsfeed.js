@@ -70,16 +70,26 @@ function connect() {
   ws.onopen = function () {
     connected = true;
     subscribed = false;
-    // 按 instId 批量订阅(成交量最大的 SUB_LIMIT 个 USDT 永续)
+    const me = ws;                       // ★捕获本连接实例: 避免重连时全局 ws 被替换而漏订
+    subscribeTickers(me);
+  };
+
+  /* ★按 instId 批量订阅(成交量最大的 SUB_LIMIT 个 USDT 永续); 捕获的连接实例稳定后才发,
+   *   发送失败自动重试, 杜绝「connected:true 但 subscribed:false、TICK 永远为空」的竞态。 */
+  function subscribeTickers(me) {
     buildSubArgs().then(function (args) {
-      if (!ws || ws.readyState !== 1) return;
+      if (!me || me.readyState !== 1) return;   // 连接已变(重连中) → 交给新连接负责
       try {
-        ws.send(JSON.stringify({ op: 'subscribe', args: args }));
+        me.send(JSON.stringify({ op: 'subscribe', args: args }));
         subscribed = true;
         log('wsfeed', 'OKX 公共WS已连接, 批量订阅 ' + args.length + ' 个合约 tickers');
-      } catch (e) { }
-    }).catch(function () { });
-  };
+      } catch (e) {
+        setTimeout(function () { subscribeTickers(me); }, 1500);
+      }
+    }).catch(function () {
+      setTimeout(function () { subscribeTickers(me); }, 1500);
+    });
+  }
 
   ws.onmessage = function (ev) {
     lastMsgAt = Date.now();

@@ -127,6 +127,62 @@ function fillLastClose(grain, list, lastClose) {
   for (const kv of map) lastClose.set(kv[0], kv[1]);
 }
 
+/* ★2026-10-28 愈合「刚收线」碎片片(WS 实时价重算 up/down + 合成 BTC 蜡烛)。
+ *   根因: build() 收线后首次重建时该片 K线常未全量落库(仅 41/179/206 等部分合约),
+ *   且 BTC 自身 K线在该 ts 也常缺失 → 预聚合库存了「样本偏低 / 缺 BTC 蜡烛 / 最高最低收盘错位」脏片,
+ *   顶行下方出现错行。此处用「K线真实收盘(有则用) + WS 实时价(缺则补)」把紧邻实时片之前的
+ *   1~2 个碎片片重算成满覆盖, 并合成其 BTC 蜡烛, 与实时片同源。仅当覆盖健康时才覆盖原值。 */
+function healRecentWS(grain, list, arr, leadCandles, livePx, GM) {
+  if (!arr.length || !leadCandles || typeof livePx !== 'function') return;
+  const MINCOV = Math.floor(list.length * 0.4);
+  const FULL = Math.floor(list.length * 0.9);     // ≥90% 视为满覆盖, 不必再愈合
+  /* ★愈合窗口: 仅最近 12 个周期内的碎片片才重算(3m→36min, 5m→60min)。
+   *   缘起: 3m 刚收线片在 build 时 K线未全量落库, 被存成 41/206 等碎片; 下一次 build 重聚合
+   *   时若该片 K线已补齐则自愈, 但补齐前(24~27 分钟内)仍显示成错行 → 此处即时愈合。
+   *   超出 12 周期的历史碎片(多为真实低覆盖/已下架合约)不重算, 保持原值, 避免 WS 现价污染旧片。 */
+  const WIN = GM * 12;
+  const now = Date.now();
+  let healed = 0, scanned = 0;
+  /* 从末尾往回扫: 跳过「进行中实时片(由 a 覆盖)」与已健康片, 愈合紧邻实时片之前的
+   * 若干「刚收线」碎片片(覆盖偏低 → 用 WS 现价补缺失收盘 + K线前收基准重算 up/down)。
+   * ★不 break 健康片: 已健康片用 continue 跳过, 才能抵达其前方仍残缺的片(如 5m 04:40满→04:30/04:25残)。 */
+  for (let k = arr.length - 1; k >= 0 && healed < 8 && scanned < 30; k--) {
+    scanned++;
+    const b = arr[k];
+    if (b.ts >= now - GM) continue;               // 当前进行中片 → 由实时片 a 负责, 跳过
+    if (b.ts < now - WIN) break;                   // 超出愈合窗口, 不再愈合(边界)
+    if (b.n >= FULL) continue;                     // 已接近满覆盖 → 跳过(不阻断前方残缺片)
+    const baseTs = b.ts - GM;
+    let up = 0, down = 0, flat = 0, n = 0, worst = null;
+    for (const x of list) {
+      let c = null;
+      try { const ch = KS.readChain(grain, x.instId, 0, 1); if (ch.length) { const db = KS.roOpen(ch[0]); if (db) { const r = db.prepare('SELECT c FROM kline WHERE ts=?').get(b.ts); if (r && isFinite(r.c) && r.c > 0) c = r.c; } } } catch (e) { }
+      if (c == null) c = livePx(x.instId);                   // 缺 K线真实收盘 → 用 WS 现价补
+      let base = null;
+      try { const ch = KS.readChain(grain, x.instId, 0, 1); if (ch.length) { const db = KS.roOpen(ch[0]); if (db) { const r = db.prepare('SELECT c FROM kline WHERE ts=?').get(baseTs); if (r && isFinite(r.c) && r.c > 0) base = r.c; } } } catch (e) { }
+      if (c == null || base == null) continue;
+      const pct = (c - base) / base; n++;
+      if (pct > 0) up++; else { down++; if (pct === 0) flat++; }
+      if (!worst || pct < worst.pct) worst = { inst: x.instId, px: c, pct: pct };
+    }
+    if (n < MINCOV) continue;                       // 该片 WS/K线仍冷 → 保原值(诚实), 继续往前找
+    b.up = up; b.down = down; b.flat = flat; b.n = n; b.worst = worst;   // b.n 即 out 里的 total
+    /* 合成 BTC 蜡烛(若该 ts 缺 BTC K线): open=前收, 高低收=WS 现价 */
+    const lead = list.find(x => x.sym === 'BTC') || null;
+    if (lead) {
+      let has = false;
+      for (const c of leadCandles) { if (c.ts === b.ts) { has = true; break; } }
+      if (!has) {
+        let lc = null;
+        try { const ch = KS.readChain(grain, lead.instId, 0, 1); if (ch.length) { const db = KS.roOpen(ch[0]); if (db) { const r = db.prepare('SELECT c FROM kline WHERE ts=?').get(baseTs); if (r && isFinite(r.c) && r.c > 0) lc = r.c; } } } catch (e) { }
+        const c = livePx(lead.instId);
+        if (lc && c) leadCandles.push({ ts: b.ts, o: lc, h: Math.max(lc, c), l: Math.min(lc, c), c: c, v: 0 });
+      }
+    }
+    healed++;
+  }
+}
+
 /* ---------------- 请求级分页裁剪 ----------------
  * page 语义: 1 = 最早一页; **负数 = 从末尾倒数(-1 = 最新一页)**。
  *   前端表格「最新在上」的首屏可直接取 -1, 不必先知道总页数。
@@ -304,16 +360,25 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
   if (arr.length >= 10) {
     /* 注意: 此处 arr 元素是原始聚合对象(字段 n), out 映射后才有 total */
     const cnt = b => (b.n !== undefined && b.n !== null) ? b.n : (b.total || 0);
-    /* ★2026-10-28 修正: 原阈值 minN=p90*0.6≈172 会把"覆盖未涨满"的近期 bar
-     *   (3m 末=29 / 5m 末=64 / 1h 末=95, 均远低于 172) 从尾部连续剔除 →
-     *   最近 12 小时涨跌家数在详细表格里整段空白(用户实测"最近12h没有数据")。
-     *   现仅剔除"几乎为空"的尾部碎片(覆盖 < 3 合约 = 真空隙/回填断点),
-     *   保留虽有部分缺口但已有真实数据的近期 bar —— 用户要求看到最新涨跌家数。 */
-    const minN = 3;
-    let cut = arr.length;
-    while (cut > 0 && cnt(arr[cut - 1]) < minN) cut--;
-    if (cut < arr.length) arr = arr.slice(0, cut);
+    /* ★2026-10-28 修复「最近记录总有 0 / 空白」:
+     *   根因: build() 在「合约 K线尚未落库完毕」时就聚合了正在写入的进行中 bar,
+     *   导致最近若干片只聚合到 5/287 等极低覆盖(实测 3m 末 03:45~03:54 连续 n=5,
+     *   其中 03:54 直接 up=0/down=5 → 表格顶行出现 0 与空白)。这些片随回填推进会在
+     *   下个 5 分钟重建时愈合(同窗口 5m 已由 16 愈合到 287), 但愈合前显示成 0/空白会误导。
+     *   修法: 仅剔除「最近 ~6 个周期窗口内、且覆盖低于阈值」的碎片——
+     *     · 覆盖达标(≥max(20, 全市场10%))的片一律保留(如前一片 n=177);
+     *     · 超出最近窗口(历史段/回填期低覆盖)一律不剔除 →
+     *       不会重现此前「minN=172 把最近 12h 整段剔成空白」的问题。
+     *   用「过滤」而非「尾部回退」: 因为愈合后的满覆盖最新片(如 n=252)会停在尾部,
+     *   挡住对前面低覆盖进行中片的剔除, 必须用窗口+覆盖双重条件直接过滤。 */
+    const minN = Math.max(20, Math.floor(list.length * 0.1));
+    const GM_MS = GRAIN_MS[grain] || 900000;
+    const winStart = Date.now() - GM_MS * 6;   // 仅最近 ~6 个周期内的低覆盖片可剔除
+    arr = arr.filter(b => !(b.ts >= winStart && cnt(b) < minN));
   }
+
+  /* ★2026-10-28 刚收线碎片片的愈合在下方「实时片」分支内(ws 实时价已就绪)统一处理,
+   *   见 healRecentWS(): 紧邻实时片之前的 1~2 个低覆盖片, 用 WS 实时价重算 up/down 并合成 BTC 蜡烛。 */
 
   /* ★2026-10-26 最新一根用 WS 实时价计算（用户: "最新的数据是ws 计算的这样就行"）
    *   双源兜底: okxws(核心订阅/页面活跃时全量) → wsfeed(250 tickers 常驻)。
@@ -361,22 +426,68 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
         if (p > 0) a.up++; else { a.down++; if (p === 0) a.flat++; }
         if (!a.worst || p < a.worst.pct) a.worst = { inst: x.instId, px: px, pct: p };
       }
+      /* ★实时补 BTC(主力)本片涨幅: 实时价 vs 上一根「已收盘」收盘 ——
+       *   避免 BTC K线滞后导致顶行 BTC% 整片空白(lead=-%)。取 ts<liveTs 的最后一根收盘作基准,
+       *   无论 K线是否含进行中片都能给出正确本片涨幅。 */
+      let liveBtcPct = null;
+      if (leadInst) {
+        try {
+          const bchain = KS.readChain(grain, leadInst.instId, 0, 1);
+          if (bchain.length) {
+            const bdb = KS.roOpen(bchain[0]);
+            if (bdb) {
+              const br = bdb.prepare('SELECT ts,c FROM kline WHERE ts < ? ORDER BY ts DESC LIMIT 1').get(liveTs);
+              const bpx = livePx(leadInst.instId);
+              if (br && isFinite(br.c) && br.c > 0 && bpx && bpx > 0) {
+                liveBtcPct = +((bpx - br.c) / br.c * 100).toFixed(2);
+              }
+            }
+          }
+        } catch (e) { }
+      }
+      a.liveBtcPct = liveBtcPct;
+      /* ★愈合「刚收线」碎片片: 紧邻实时片之前的 1~2 个低覆盖片, 用 WS 实时价重算 up/down
+       *   并合成其 BTC 蜡烛(若该 ts 缺 BTC K线) → 顶行下方不再出现错行/空白。 */
+      healRecentWS(grain, list, arr, leadCandles, livePx, GM);
+      /* ★合成「缺 BTC K线」的最近行: 若某行 ts 在 leadCandles 中缺 BTC 蜡烛
+       *   (BTC 自身 K线滞后于其它合约, 常见于最尖端 1~2 根) → 用 WS 现价合成一根
+       *   (开=前收/现价差, 高/低/收=现价), 表格「最高/最低/收盘/涨幅」不再空白。
+       *   仅对最近 ~8 周期内的已收线生效(liveTs 由下方实时块负责, 不在此合成)。 */
+      (function synthMissingLead() {
+        if (!leadCandles || !leadInst) return;
+        const have = new Set(leadCandles.map(c => c.ts));
+        const since = Date.now() - GM * 8;
+        for (const b of arr) {
+          if (b.ts < since || b.ts >= liveTs) continue;     // 仅最近窗口的已收线
+          if (have.has(b.ts)) continue;
+          let base = null;
+          try { const ch = KS.readChain(grain, leadInst.instId, 0, 1); if (ch.length) { const db = KS.roOpen(ch[0]); if (db) { const r = db.prepare('SELECT c FROM kline WHERE ts=?').get(b.ts - GM); if (r && isFinite(r.c) && r.c > 0) base = r.c; } } } catch (e) { }
+          const c = livePx(leadInst.instId);
+          if (!c || c <= 0) continue;
+          leadCandles.push({ ts: b.ts, o: base || c, h: Math.max(base || c, c), l: Math.min(base || c, c), c: c, v: 0 });
+          have.add(b.ts);
+        }
+      })();
       /* 覆盖≥30% 合约才纳入（WS 快照刚启动时避免残缺统计） */
       if (a.n >= Math.max(2, Math.floor(list.length * 0.3))) {
         arr = arr.filter(b => b.ts !== liveTs);       // 库内快照片 → WS 现价片覆盖
         arr.push(a);
       }
       /* 主力K线补「形成中」一根: 开=库尾收盘, 高低收=WS现价
-       *   ★断层≤3根也补(保持末根=末片同轴优先; 视觉按序画无空洞感), 断更多等保鲜 */
+       *   ★断层也补: 放松到 60 个周期(覆盖 BTC K线滞后到 18 分钟仍画得出实时蜡烛,
+       *   否则顶行 BTC 蜡烛/涨幅整片空白); 视觉按序画无空洞感。 */
       if (leadInst && leadCandles && leadCandles.length) {
         const lc = lastClose.get(leadInst.instId);
         const px = livePx(leadInst.instId);
-        if (lc && px && liveTs > lc.ts && liveTs - lc.ts <= GM * 3) {
+        if (lc && px && liveTs > lc.ts && liveTs - lc.ts <= GM * 60) {
           leadCandles.push({ ts: liveTs, o: lc.c, h: Math.max(lc.c, px), l: Math.min(lc.c, px), c: px, v: 0 });
         }
       }
     }
   } catch (e) { }
+
+  /* ★合成/补根蜡烛按 ts 排序, 保证 leadMap 与 K线主轴严格有序(愈合片可能在中间插入) */
+  if (leadCandles && leadCandles.length > 1) leadCandles.sort((a, b) => a.ts - b.ts);
 
   // 主力涨幅序列（由 leadCandles 相邻收盘计算，与K线共用同一序列 → K线与pct严格对齐）
   const leadMap = new Map();
@@ -389,7 +500,11 @@ async function calc(sector, grain, bars, beforeTs, lead, opt) {
 
   const out = arr.map(b => {
     const ratio = b.n ? b.up / b.n : 0;
-    const lp = leadMap.get(b.ts);
+    const lpRaw = leadMap.get(b.ts);
+    /* ★实时片(顶行)若 leadCandles 尚未含该 ts(主力K线滞后), 用 liveBtcPct 兜底, 避免顶行 BTC% 空白 */
+    const lp = (lpRaw === null || lpRaw === undefined)
+      ? (b.liveBtcPct !== undefined ? b.liveBtcPct : null)
+      : lpRaw;
     /* ★『主力×差额 共振强度指数』（2026-10-26，用户要求精确到 2 位小数）
      *   方向 = 主力涨跌(±)，强度 = 涨跌家数差额 × 主力涨跌幅(小数)
      *   → 主力大涨(正)同时市场普遍上涨(diff正) → 强正；主力跌但市场涨 → 背离(负) */

@@ -11,7 +11,7 @@
  *     - 详细表格 / 信号回测均带分页按钮（可翻历史）
  *     - K线图上叠加买卖信号买点标记；BTC K线显示涨幅
  * ----------------------------------------------------------------------------
- * ★数据源：/api/boards/updown / /api/boards/buysignal
+ * ★数据源：/api/boards/updown / /api/boards/chan(缠论大级别转折信号, 2026-10-28起)
  * ========================================================================== */
 (function (global) {
   'use strict';
@@ -110,7 +110,7 @@
       '<div class="cd-box">' +
       '<div class="cd-t">📈 <span id="ud-kttl-' + UID + '">' + esc(s.lead) + 'USDT</span> ' +
       '<span class="tf-cur" id="ud-kgrain-' + UID + '">15分钟</span> K线 ' +
-      '<small>分时选项卡切换 · 悬浮显示该时间全市场涨跌统计 · 下跌占比≥50%连3次→≤20%处标买点</small></div>' +
+      '<small>分时选项卡切换 · 悬浮显示该时间全市场涨跌统计 · 缠论大级别转折连线：底买顶卖 涨红跌绿</small></div>' +
       '<div id="ud-ratio-' + UID + '" class="cd-chart" style="height:460px;position:relative">' +
       '<canvas id="ud-kcv-' + UID + '" style="width:100%;height:460px;display:block"></canvas>' +
       '</div>' +
@@ -130,8 +130,8 @@
       '<div class="tbl-pg" id="ud-tpg-' + UID + '" style="padding:8px 4px"></div>' +
       '</div>' +
       '<div class="ud-sigwrap">' +
-      '<div class="cd-t" style="margin-bottom:6px">🛒 <b id="ud-siggrain-' + UID + '">15分钟</b> BTC 涨跌家数买卖信号回测 <small>' +
-      '规则：下跌占比≥50%连续3次 → 第4次≤20% 买入BTC · 跟随表格分时选项卡 · 仅BTC · 分页可翻历史</small></div>' +
+      '<div class="cd-t" style="margin-bottom:6px">🪜 <b id="ud-siggrain-' + UID + '">15分钟</b> 缠论大级别转折点 · BTC 买卖信号回测 <small>' +
+      '划线式确认 · 无预测 · 连接段≥40根K线且涨跌幅≥10% · 底=买 顶=卖 · 先买后卖红线 / 先卖后买绿线 · 跟随表格分时选项卡</small></div>' +
       '<div id="ud-sig-' + UID + '"></div>' +
       '</div>' +
       /* ★2026-10-26 用户要求：连续上涨/下跌家数 > 100 的区段统计 + BTC 多空关系核实 */
@@ -166,7 +166,7 @@
     };
     s.refs.sec.value = s.sector;
     s.refs.sec.addEventListener('change', function () { s.sector = s.refs.sec.value; s.tpage = 1; s.tBefore = 0; s.tPages = 0; s.tWinBack = 0; loadAll(); });
-    s.refs.lead.addEventListener('change', function () { s.lead = s.refs.lead.value; s.sigs = null; s.tpage = 1; s.tBefore = 0; s.tPages = 0; s.tWinBack = 0; loadAll(); });
+    s.refs.lead.addEventListener('change', function () { s.lead = s.refs.lead.value; s.tpage = 1; s.tBefore = 0; s.tPages = 0; s.tWinBack = 0; loadAll(); });
     s.refs.refresh.addEventListener('click', function () { loadAll(); });
     /* ★连续涨跌统计分页 */
     if (s.refs.spg) s.refs.spg.addEventListener('click', function (e) {
@@ -190,6 +190,10 @@
       });
       if (s.refs.kgrain) s.refs.kgrain.textContent = tfLabel(g);
       loadK();
+      /* ★K线分时切换 → 预取该分时的缠论信号(画线), 到位后重画K线 */
+      if (global.ChanMajor) {
+        global.ChanMajor.ensure(g, {}).then(function () { if (st().grain === g) renderK(); }).catch(function () { });
+      }
     });
     /* ★表格分时切换（刷详细表格 + 该分时回测面板） */
     var bar2 = el.querySelector('#ud-tfgrp2-' + UID);
@@ -332,41 +336,53 @@
       '<th>持1均值%</th><th>持5均值%</th><th>持10均值%</th></tr></thead><tbody>' +
       sumRow('连续上涨家数&gt;100', su) + sumRow('连续下跌家数&gt;100', sd) + '</tbody></table>';
     h += '<div class="cd-t" style="margin:10px 0 6px">📋 分时明细（每段结束后的真实走势 · 最新在上）</div>';
-    h += '<table class="ud-excel"><thead><tr><th>结束时间</th><th>信号</th><th>连续根数</th>' +
-      '<th>平均涨家</th><th>平均跌家</th><th>样本</th><th>持1</th><th>持3</th><th>持5</th><th>持10</th>' +
-      '<th>做多</th><th>做空</th></tr></thead><tbody>';
-    slice.forEach(function (r) {
-      var a = r.after || {};
-      var cl = (r.longRet === null || r.longRet === undefined) ? '' : (r.longRet > 0 ? 'num-up' : 'num-dn');
-      var cs = (r.shortRet === null || r.shortRet === undefined) ? '' : (r.shortRet > 0 ? 'num-up' : 'num-dn');
-      h += '<tr><td>' + esc(fmtDT(r.endTs)) + '</td>' +
-        '<td>' + (r.type === 'up' ? '<span class="num-up">连续涨</span>' : '<span class="num-dn">连续跌</span>') + '</td>' +
-        '<td class="num">' + r.len + '</td><td class="num">' + r.upAvg + '</td><td class="num">' + r.downAvg + '</td>' +
-        '<td class="num">' + r.total + '</td>' +
-        '<td class="num">' + pv(a.h1) + '</td><td class="num">' + pv(a.h3) + '</td>' +
-        '<td class="num">' + pv(a.h5) + '</td><td class="num">' + pv(a.h10) + '</td>' +
-        '<td class="' + cl + '">' + pv(r.longRet) + '</td><td class="' + cs + '">' + pv(r.shortRet) + '</td></tr>';
-    });
-    h += '</tbody></table>';
+    /* ★2026-10-28 组件化: 明细表由共享 DetailTable 渲染(与详细表格/回测信号表同组件) */
+    if (!s.stdt) s.stdt = new DetailTable({ pageSize: size, emptyText: '暂无区段' });
+    s.stdt.cols = strCols();
+    s.stdt.setData(rows.map(function (r) { return Object.assign({}, r, { tds: strTds(r) }); }), rows.length, page);
+    h += s.stdt.html();
     s.refs.str.innerHTML = h;
-    if (s.refs.spg) s.refs.spg.innerHTML = pageBtns(pages, page, 'spage');
+    if (s.refs.spg) s.refs.spg.innerHTML = s.stdt.pagerHTML('spage');   // 点击委托已由 build() 绑定
   }
 
-  /* BTC信号：六周期一次取回（表格选项卡切换只切换显示面板，不重复请求） */
-  function loadSigs(force) {
-    var s = st();
-    if (!force && s.sigs && Date.now() - s.sigsAt < 20000) { renderSig(); return; }
-    Net.get('/api/boards/buysignal?bars=2000&t=' + Date.now(), { ttl: 20000, timeout: 90000 })
-      .then(function (j) {
-        if (j && j.ok) { s.sigs = j; s.sigsAt = Date.now(); renderSig(); renderK(); }
-      }).catch(function () { });
+  /* 连续信号·分时明细 12 列（共享组件列配置） */
+  function strCols() {
+    var labels = ['结束时间', '信号', '连续根数', '平均涨家', '平均跌家', '样本', '持1', '持3', '持5', '持10', '做多', '做空'];
+    return labels.map(function (lb, i) { return { label: lb, cell: function (r) { return r.tds[i]; } }; });
   }
+  function strTds(r) {
+    var a = r.after || {};
+    function pv(x) { return DetailTable.pct(x); }
+    var cl = (r.longRet === null || r.longRet === undefined) ? '' : (r.longRet > 0 ? 'num-up' : 'num-dn');
+    var cs = (r.shortRet === null || r.shortRet === undefined) ? '' : (r.shortRet > 0 ? 'num-up' : 'num-dn');
+    return [
+      '<td>' + esc(fmtDT(r.endTs)) + '</td>',
+      '<td>' + (r.type === 'up' ? '<span class="num-up">连续涨</span>' : '<span class="num-dn">连续跌</span>') + '</td>',
+      '<td class="num">' + r.len + '</td>',
+      '<td class="num">' + r.upAvg + '</td>',
+      '<td class="num">' + r.downAvg + '</td>',
+      '<td class="num">' + r.total + '</td>',
+      DetailTable.td(pv(a.h1)),
+      DetailTable.td(pv(a.h3)),
+      DetailTable.td(pv(a.h5)),
+      DetailTable.td(pv(a.h10)),
+      '<td class="' + cl + '">' + pv(r.longRet) + '</td>',
+      '<td class="' + cs + '">' + pv(r.shortRet) + '</td>'
+    ];
+  }
+
+  /* BTC信号：旧 buysignal 六周期取数已删除 —— 缠论组件按分时自取 */
 
   function loadAll() {
     loadK();
     loadT();
-    loadSigs(true);
+    renderSig();          // ★2026-10-28 缠论共享组件(自动拉取 tgrain 信号, K线连线经 onSignals 回调重画)
     loadStreak();
+    /* K线分时可能与表格分时不同 → 给 K线周期也预取一份缠论信号(画线用) */
+    var s0 = st();
+    if (global.ChanMajor && s0.grain !== s0.tgrain) {
+      global.ChanMajor.ensure(s0.grain, {}).then(function () { if (st().grain === s0.grain) renderK(); }).catch(function () { });
+    }
   }
 
   /* ---------------- ① K线区渲染（当前 grain） ---------------- */
@@ -385,24 +401,18 @@
       for (var k1 = 0; k1 < cdl.length; k1++) {
         prev[cdl[k1].ts] = (k1 > 0 && cdl[k1 - 1] && isFinite(cdl[k1 - 1].c)) ? cdl[k1 - 1].c : null;
       }
-      /* ★K线买卖点标记：当前周期的全部买信号（红火箭下） */
-      var mk = [];
-      if (s.sigs && s.sigs.all) {
-        for (var mi = 0; mi < s.sigs.all.length; mi++) {
-          var it = s.sigs.all[mi];
-          if (!it || it.grain !== s.grain || !it.signals) continue;
-          for (var k2 = 0; k2 < it.signals.length; k2++) {
-            var sg = it.signals[k2];
-            mk.push({ t: sg.ts, dir: 1, price: sg.buyPx, label: '≈买' + tfLabel(s.grain) });
-          }
-          break;
-        }
-      }
+      /* ★K线买卖点+连线（2026-10-28 换新）: 缠论大级别转折信号
+       *   共享组件 ChanMajor —— 与回测表同一份 /api/boards/chan 输出(算法唯一 engines/chan.js)。
+       *   marks: 底=买(红下) / 顶=卖(绿上); links: 先买后卖=红线 / 先卖后买=绿线, 开放段虚线 */
+      var chd = (global.ChanMajor ? global.ChanMajor.chartData(s.grain) : null);
+      var mk = chd ? chd.marks : [];
+      var lk = chd ? chd.links : [];
       global.drawKline(s.refs.kcv, {
         bars: cdl.map(function (ck) { return { t: ck.ts, o: ck.o, h: ck.h, l: ck.l, c: ck.c, v: ck.v }; }),
         mainInd: 'ma', subInd: 'macd',
         height: 460, stateKey: 'feed:' + s.lead + ':' + s.grain,
         marks: mk,
+        links: lk,
         extraTitle: function () { return '全市场涨跌统计'; },
         extraRows: function (b) {
           var bi = barByTs[b.t] || {};
@@ -451,7 +461,7 @@
         '</b> ~ <b>' + esc(fmtDT(newS)) + '</b>（<b>' + j.spanDays + '</b> 天）· <b>' + j.covCount + '/' + j.count +
         '</b> 合约有数据 · 上涨比例↔主力涨幅 r=<b>' + ((stx.corr === null || stx.corr === undefined) ? '-' : stx.corr) +
         '</b> 一致率 <b>' + ((stx.agree === null || stx.agree === undefined) ? '-' : stx.agree + '%') + '</b> · ' +
-        '<span class="muted">K线上 ▲ 为涨跌家数买信号（下跌占比连续3根≥50%后第4根≤20%）</span>';
+        '<span class="muted">K线上连线为缠论大级别转折信号：底=买 → 顶=卖 红线 / 顶=卖 → 底=买 绿线（进行中未确认段为虚线）</span>';
     }
   }
 
@@ -459,10 +469,12 @@
     return '<div class="md-stat"><span>' + esc(k) + '</span><b class="' + (cls || '') + '">' + esc(v) + '</b></div>';
   }
 
-  /* ---------------- ② 详细表格（当前 tgrain · 全量行 · 分页） ---------------- */
-  /* ★单行单元格（涨/跌/平家数 + BTC 列 + 涨跌幅等）。
+  /* ---------------- ② 详细表格（当前 tgrain · 全量行 · 分页） ----------------
+   * ★2026-10-28 组件化: 表头/表体/空态由共享 DetailTable(web/js/ui/detail-table.js)渲染,
+   *   本文件只提供 列标签(tCols) + 单行单元格数组(rowTds) + SSE 顶行注入(tipRows)。
+   * ★单行单元格数组（涨/跌/平家数 + BTC 列 + 涨跌幅等, 14 列）。
    *   bi = {ts,up,down,flat,total,upRatio,diff}; ck = {o,h,l,c,pc}(BTC K线, pc=前收) */
-  function rowCells(bi, ck) {
+  function rowTds(bi, ck) {
     var rp = bi.upRatio;
     var diffTxt = (bi.diff === null || bi.diff === undefined) ? '-' : ((bi.diff > 0 ? '+' : '') + bi.diff);
     var total = bi.total || 0;
@@ -482,20 +494,29 @@
     var hiCls = (hiR === null) ? '' : (hiR >= 0 ? 'num-up' : 'num-dn');
     var oCls = (oR === null) ? '' : (oR >= 0 ? 'num-up' : 'num-dn');
     var loCls = (loR === null) ? '' : (loR >= 0 ? 'num-up' : 'num-dn');
-    return '<td>' + esc(fmtDT(bi.ts)) + '</td>' +
-      '<td>' + (bi.up === null || bi.up === undefined ? '-' : bi.up) + '</td>' +
-      '<td>' + (bi.down === null || bi.down === undefined ? '-' : bi.down) + '</td>' +
-      '<td>' + total + '</td>' +
-      '<td>' + (rp === null || rp === undefined ? '-' : rp.toFixed(2) + '%') + '</td>' +
-      '<td>' + diffTxt + '</td>' +
-      '<td class="num-up">' + px(h) + '</td>' +
-      '<td class="num-dn">' + px(lo) + '</td>' +
-      '<td class="' + ((c !== null) ? (c >= o ? 'num-up' : 'num-dn') : '') + '"><b>' + px(c) + '</b></td>' +
-      '<td class="' + cCls + '">' + pct2(chg) + '</td>' +
-      '<td class="num">' + pct2(amp) + '</td>' +
-      '<td class="' + hiCls + '">' + pct2(hiR) + '</td>' +
-      '<td class="' + oCls + '">' + pct2(oR) + '</td>' +
-      '<td class="' + loCls + '">' + pct2(loR) + '</td>';
+    return [
+      '<td>' + esc(fmtDT(bi.ts)) + '</td>',
+      '<td>' + (bi.up === null || bi.up === undefined ? '-' : bi.up) + '</td>',
+      '<td>' + (bi.down === null || bi.down === undefined ? '-' : bi.down) + '</td>',
+      '<td>' + total + '</td>',
+      '<td>' + (rp === null || rp === undefined ? '-' : rp.toFixed(2) + '%') + '</td>',
+      '<td>' + diffTxt + '</td>',
+      '<td class="num-up">' + px(h) + '</td>',
+      '<td class="num-dn">' + px(lo) + '</td>',
+      '<td class="' + ((c !== null) ? (c >= o ? 'num-up' : 'num-dn') : '') + '"><b>' + px(c) + '</b></td>',
+      '<td class="' + cCls + '">' + pct2(chg) + '</td>',
+      '<td class="num">' + pct2(amp) + '</td>',
+      '<td class="' + hiCls + '">' + pct2(hiR) + '</td>',
+      '<td class="' + oCls + '">' + pct2(oR) + '</td>',
+      '<td class="' + loCls + '">' + pct2(loR) + '</td>'
+    ];
+  }
+  /* 详细表格 14 列标签（含动态 lead 名）→ 共享组件列配置 */
+  function tCols(lead) {
+    var labels = ['时间', '上涨家数', '下跌家数', '样本', '上涨比例', '差额(涨-跌)',
+      '最高价(' + lead + ')', '最低价(' + lead + ')', '收盘价(' + lead + ')',
+      '涨幅%', '振幅%', '最高幅度%', '涨跌幅%', '最低价跌幅%'];
+    return labels.map(function (lb, i) { return { label: lb, cell: function (r) { return r.tds[i]; } }; });
   }
 
   function buildTableRows(j) {
@@ -510,9 +531,28 @@
       var ck = clByTs[bi.ts] || null;
       /* ★前收盘优先取 K线自带 pc(整条序列真实前一根, 分页安全); 否则本页上一根 bar 的收 */
       if (ck && (ck.pc === undefined || ck.pc === null || !isFinite(ck.pc)) && i > 0 && bars[i - 1] && isFinite(bars[i - 1].c)) ck = Object.assign({}, ck, { pc: bars[i - 1].c });
-      out.push({ ts: bi.ts, html: '<tr>' + rowCells(bi, ck) + '</tr>' });
+      out.push({ ts: bi.ts, bi: bi, ck: ck, tds: rowTds(bi, ck) });
     }
     out.reverse();          // 最新在上
+    return out;
+  }
+
+  /* ★SSE 顶行注入(共享组件 tipFn): 顶行=当前形成中bar(全列实时, 含 BTC 实时价);
+   *   第二行=前一根已收盘bar(家数类实时刷新, BTC 列保留 HTTP 原值→沿用该行原 ck)。
+   *   守卫双保险: 仅当 prev.ts 严格早于 cur.ts 才覆盖第二行
+   *   (修复「两个相同时间行」重复假象; 后端 computePrev 已改为固定取 cur.ts-GM)。 */
+  function tipRows(slice, tip) {
+    if (!tip || !tip.cur || !slice || !slice.length) return slice;
+    var out = slice.slice();
+    var cur = tip.cur, btc = cur.lead || null;
+    var ck = btc ? { o: btc.o, h: btc.h, l: btc.l, c: btc.c, pc: btc.o } : null;
+    var curBi = { ts: cur.ts, up: cur.up, down: cur.down, total: cur.total, upRatio: cur.upRatio, diff: cur.diff };
+    out[0] = { ts: cur.ts, bi: curBi, ck: ck, tds: rowTds(curBi, ck) };
+    if (tip.prev && out[1] && tip.prev.ts < tip.cur.ts) {
+      var pv = tip.prev;
+      var pvBi = { ts: pv.ts, up: pv.up, down: pv.down, total: pv.total, upRatio: pv.upRatio, diff: pv.diff };
+      out[1] = { ts: pv.ts, bi: pvBi, ck: out[1].ck, tds: rowTds(pvBi, out[1].ck) };
+    }
     return out;
   }
 
@@ -542,62 +582,34 @@
   }
   function patchLiveTip(j) {
     var s = st(); if (!s.refs.tb) return;
-    /* 仅当当前正处于「最新窗口」(未回溯历史) 才覆盖顶行, 否则会和翻页冲突 */
-    if (s.tBefore) return;
-    var tb = s.refs.tb.querySelector('table.ud-excel'); if (!tb) return;
-    var tbody = tb.querySelector('tbody'); if (!tbody) return;
-    var rows = tbody.querySelectorAll('tr');
+    /* ★2026-10-28 修复「翻页后最上面两行还是最近数据」: WS 实时顶 2 行(当前形成中片+前一片)
+     *   只在「最新一页(最新窗口)」才有意义。一旦用户翻到其它页(或回溯历史), 立即停手,
+     *   否则每发一次 SSE 就把当前页顶两行覆盖成最新数据, 与翻页结果打架。 */
+    if (s.tBefore || s.tpage !== 1) return;
     if (!j.cur || j.cur.n < 30) return;                 // WS 未就绪(快照启动/重连中) 不覆盖
-    /* ★顶行 = 当前形成中 bar(实时, 含 BTC 实时价) */
-    var cur = j.cur, btc = cur.lead || null;
-    var ck = btc ? { o: btc.o, h: btc.h, l: btc.l, c: btc.c, pc: btc.o } : null;
-    var curBi = { ts: cur.ts, up: cur.up, down: cur.down, total: cur.total, upRatio: cur.upRatio, diff: cur.diff };
-    if (rows[0]) rows[0].innerHTML = rowCells(curBi, ck);
-    /* ★第二行 = 前一根已收盘 bar(家数类实时刷新, BTC 列保留 HTTP 原值) */
-    if (j.prev && rows[1]) {
-      var pv = j.prev, pvBi = { ts: pv.ts, up: pv.up, down: pv.down, total: pv.total, upRatio: pv.upRatio, diff: pv.diff };
-      var cells = rows[1].children;
-      if (cells.length >= 6) {
-        cells[0].textContent = fmtDT(pvBi.ts);
-        cells[1].textContent = (pvBi.up === null || pvBi.up === undefined) ? '-' : pvBi.up;
-        cells[2].textContent = (pvBi.down === null || pvBi.down === undefined) ? '-' : pvBi.down;
-        cells[3].textContent = pvBi.total || 0;
-        cells[4].textContent = (pvBi.upRatio === null || pvBi.upRatio === undefined) ? '-' : pvBi.upRatio.toFixed(2) + '%';
-        cells[5].textContent = ((pvBi.diff > 0 ? '+' : '') + pvBi.diff);
+    /* ★2026-10-28 组件化: 顶行/第二行注入(tipRows) + 表格本体替换(patchTip 只换 <table>,
+     *   信息行/分页条不动, 不闪) 由共享 DetailTable 统一处理。 */
+    if (s.tdt && s.tdt.patchTip(j)) {
+      var cur = j.cur, btc = cur.lead || null;
+      /* ★顶部统计条: 最新家数/比例/差额 + 主力涨幅 同步刷(让"当前比例"秒级跳动) */
+      if (s.refs.stats) {
+        updateStat('上涨家数', cur.up);
+        updateStat('下跌家数', cur.down);
+        updateStat('当前比例', (cur.upRatio === null || cur.upRatio === undefined) ? '-' : cur.upRatio.toFixed(1) + '%', cur.upRatio >= 50 ? 'up' : 'dn');
+        updateStat('差额', (cur.diff > 0 ? '+' : '') + cur.diff, bias(cur.diff));
+        if (btc) updateStat(s.lead + ' 涨幅', (btc.chg > 0 ? '+' : '') + btc.chg.toFixed(3) + '%', btc.chg > 0 ? 'up' : (btc.chg < 0 ? 'dn' : 'flat'));
       }
-    }
-    /* ★顶部统计条: 最新家数/比例/差额 + 主力涨幅 同步刷(让"当前比例"秒级跳动) */
-    if (s.refs.stats) {
-      updateStat('上涨家数', cur.up);
-      updateStat('下跌家数', cur.down);
-      updateStat('当前比例', (cur.upRatio === null || cur.upRatio === undefined) ? '-' : cur.upRatio.toFixed(1) + '%', cur.upRatio >= 50 ? 'up' : 'dn');
-      updateStat('差额', (cur.diff > 0 ? '+' : '') + cur.diff, bias(cur.diff));
-      if (btc) updateStat(s.lead + ' 涨幅', (btc.chg > 0 ? '+' : '') + btc.chg.toFixed(3) + '%', btc.chg > 0 ? 'up' : (btc.chg < 0 ? 'dn' : 'flat'));
     }
   }
 
-  /* ★分页按钮条（详细表格 / 信号回测共用；用户: 没有分页按钮看不到历史） */
-  function pageBtns(pages, cur, prefix) {
-    cur = cur || 1;
-    var s = '', i, win = 8;
-    function pb(num, label, dis, act) {
-      return '<button class="tbl-pg-btn' + (act ? ' on' : '') + '" data-' + prefix + '="' + num + '"' + (dis ? ' disabled' : '') + '>' + label + '</button>';
-    }
-    s += pb(1, '«', cur <= 1, false);
-    s += pb((cur - 1) || 1, '‹', cur <= 1, false);
-    var lo = Math.max(1, cur - win), hi = Math.min(pages, cur + win);
-    for (i = lo; i <= hi; i++) s += pb(i, i, false, i === cur);
-    s += pb(Math.min(cur + 1, pages), '›', cur >= pages, false);
-    s += pb(pages, '»', cur >= pages, false);
-    return s;
-  }
+  /* ★分页按钮条已收敛到共享组件: DetailTable.pageBtns(pages, cur, prefix) —— 唯一实现 */
 
   function renderT() {
     var s = st(), j = s.tdata;
     if (!j || !s.refs.tb) return;
     openLive(s.tgrain);            // ★打开/保持 当前分时 的 WS 实时连接(顶 2 行秒级刷新)
     var rows = buildTableRows(j);
-    /* ★服务端已裁好页 → rows 直接是本页内容(通常 20 行), 不再本地切一刀。
+    /* ★服务端已裁好页 → rows 直接是本页内容(通常 10 行), 组件 mode='server' 不再本地切一刀。
      *   兜底: 万一没拿到 pageInfo(后端未分页), 本地限制在 100 行内防止一次性渲染几千行。 */
     var pi = j.pageInfo || null;
     var pages = (pi && pi.pages) || Math.max(1, Math.ceil(rows.length / 100));
@@ -605,18 +617,21 @@
     if (s.tpage > pages) s.tpage = pages;
     if (s.tpage < 1) s.tpage = 1;
     if (!pi && rows.length > 100) rows = rows.slice((s.tpage - 1) * 100, s.tpage * 100);
-    var html = rows.map(function (x) { return x.html; }).join('');
+    /* ★2026-10-28 组件化: 表头/表体/空态由共享 DetailTable 渲染; SSE 顶行走 tipFn=tipRows */
+    if (!s.tdt) {
+      s.tdt = new DetailTable({ mode: 'server', cols: tCols(s.lead), tipFn: tipRows, emptyText: '暂无数据' });
+      s.tdt._lead = s.lead;
+    } else if (s.tdt._lead !== s.lead) {           // 换主力币 → 列标签里的价格列名跟着换
+      s.tdt.cols = tCols(s.lead);
+      s.tdt._lead = s.lead;
+    }
+    s.tdt.setData(rows, tn, s.tpage);
     var backTxt = s.tWinBack > 0 ? (' · 已回溯 <b>' + s.tWinBack + '</b> 段历史') : '';
     /* 表格本体进滚动容器；分页条在容器外固定可见 */
-    s.refs.tb.innerHTML =
-      '<div class="ud-pginfo">第 <b>' + s.tpage + '</b> / <b>' + pages + '</b> 页 · 当前窗口共 <b>' + tn +
-      '</b> 根 · 覆盖约 ' + (j.spanDays || 0) + ' 天' + backTxt + ' · 服务端分页(每页 ' + TPAGE_SIZE + ' 行)</div>' +
-      '<table class="ud-excel"><thead>' +
-      '<tr><th>时间</th><th>上涨家数</th><th>下跌家数</th>' +
-      '<th>样本</th><th>上涨比例</th><th>差额(涨-跌)</th>' +
-      '<th>最高价(' + esc(s.lead) + ')</th><th>最低价(' + esc(s.lead) + ')</th><th>收盘价(' + esc(s.lead) + ')</th>' +
-      '<th>涨幅%</th><th>振幅%</th><th>最高幅度%</th><th>涨跌幅%</th><th>最低价跌幅%</th>' +
-      '</tr></thead><tbody>' + html + '</tbody></table>';
+    s.tdt.render(s.refs.tb, {
+      info: '<div class="ud-pginfo">第 <b>' + s.tpage + '</b> / <b>' + pages + '</b> 页 · 当前窗口共 <b>' + tn +
+        '</b> 根 · 覆盖约 ' + (j.spanDays || 0) + ' 天' + backTxt + ' · 服务端分页(每页 ' + TPAGE_SIZE + ' 行)</div>'
+    });
     var pg = s.el.querySelector('#ud-tpg-' + UID);
     if (pg) {
       /* ★2026-10-28 「« 更早」按钮: 窗口收窄到 2000 根后历史深度变浅,
@@ -624,7 +639,7 @@
       var olderBtn = s.loadingOlder
         ? '<span class="ud-pginfo">⏳ 加载更早…</span>'
         : '<button class="ud-pgbtn" data-older="1" title="往回加载更早的 ' + (s.bars || 2000) + ' 根">« 更早</button>';
-      pg.innerHTML = olderBtn + pageBtns(pages, s.tpage, 'tp');
+      pg.innerHTML = olderBtn + DetailTable.pageBtns(pages, s.tpage, 'tp');
       pg.onclick = function (e) {
         var t = e.target;
         if (t && t.dataset && t.dataset.older) { loadOlder(); return; }
@@ -651,105 +666,29 @@
     loadT(1, j.oldest - 1);          // 新窗口先取它最新的一页(页码重置)
   }
 
-  /* ---------------- ③ BTC 信号回测面板（跟随表格分时 · 分页可翻历史） ----------------
-   *  规则: 下跌家数占比 downRatio ≥50% 连续3次 → 第4次 ≤20% → 买入BTC */
+  /* ---------------- ③ 缠论大级别转折点 · BTC 买卖信号回测（2026-10-28 全新共享组件） ----------------
+   *  ★旧「下跌占比≥50%×3 → ≤20% 买入」信号表已按用户要求整体删除；
+   *    回测表 + K线买卖点连线 全部换成缠论划线信号，共用一个算法组件：
+   *    数据源唯一 /api/boards/chan（后端 engines/chan.js），前端渲染统一走 ChanMajor。 */
+  function mountChan() {
+    var s = st();
+    if (s.chan) return s.chan;
+    s.chan = global.ChanMajor.mount(s.refs.sig, {
+      grain: s.tgrain,
+      minBars: 40,
+      minAmp: 10,
+      onSignals: function () { renderK(); }      // 信号到位 → K线连线/买卖点重画
+    });
+    return s.chan;
+  }
   function renderSig() {
     var s = st();
     if (!s.refs.sig) return;
-    if (!s.sigs) { s.refs.sig.innerHTML = '<div class="sg-note">信号数据加载中…</div>'; return; }
-    var all = s.sigs.all || [];
-    var a = null;
-    for (var i = 0; i < all.length; i++) if (all[i] && all[i].grain === s.tgrain) { a = all[i]; break; }
-
-    if (!a || !a.ok) {
-      s.refs.sig.innerHTML = '<div class="ud-sigpanel">' +
-        '<div class="cd-t ud-sighd">🪜 <b>' + esc(tfLabel(s.tgrain)) + '</b> <small>' + (a && a.err ? esc(a.err) : '数据回补中…') + '</small></div>' +
-        '<table class="ud-excel ud-sig"><tbody><tr><td class="num">—</td></tr></tbody></table>' +
-        '</div>' +
-        '<div class="cd-note" id="ud-sigstore-' + UID + '" style="text-align:left;color:#66708a"></div>';
-      var pg0 = s.el.querySelector('#ud-spg-' + UID);
-      if (pg0) pg0.innerHTML = '';
-      loadSigStore();
+    if (!global.ChanMajor) {
+      s.refs.sig.innerHTML = '<div class="sg-note">缠论组件加载中…</div>';
       return;
     }
-
-    var st2 = a.stats || {};
-    var sigs = (a.signals || []).slice().reverse();      // 最新在上
-    var tn = sigs.length, tp = s.sPageSize || 10;
-    var pages = Math.max(1, Math.ceil(tn / tp));
-    if (s.spage > pages) s.spage = pages;
-    if (s.spage < 1) s.spage = 1;
-    var start = (s.spage - 1) * tp, end = Math.min(start + tp, tn);
-    var rows = sigs.slice(start, end).map(function (sg, idx) {
-      return '<tr>' +
-        '<td>' + (start + idx + 1) + '</td>' +
-        '<td>' + esc(fmtDT(sg.ts)) + '</td>' +
-        '<td class="num-dn">' + esc(sg.buyRatio) + '%</td>' +
-        '<td class="num">' + (sg.buyPx === null || sg.buyPx === undefined ? '-' : sg.buyPx) + '</td>' +
-        '<td class="' + ((sg.f1 === null || sg.f1 === undefined) ? '' : (sg.f1 >= 0 ? 'num-up' : 'num-dn')) + '">' + pct(sg.f1) + '</td>' +
-        '<td class="' + ((sg.f2 === null || sg.f2 === undefined) ? '' : (sg.f2 >= 0 ? 'num-up' : 'num-dn')) + '">' + pct(sg.f2) + '</td>' +
-        '<td class="' + ((sg.f3 === null || sg.f3 === undefined) ? '' : (sg.f3 >= 0 ? 'num-up' : 'num-dn')) + '">' + pct(sg.f3) + '</td>' +
-        '<td class="' + ((sg.f5 === null || sg.f5 === undefined) ? '' : (sg.f5 >= 0 ? 'num-up' : 'num-dn')) + '">' + pct(sg.f5) + '</td>' +
-        '</tr>';
-    }).join('') || '<tr><td colspan="8" class="num">无信号</td></tr>';
-
-    s.refs.sig.innerHTML =
-      '<div class="ud-sigpanel">' +
-      '<div class="cd-t ud-sighd">🪜 ' + esc(tfLabel(s.tgrain)) + ' · 买卖信号回测 ' +
-      '<small>信号<b> ' + (st2.total || 0) + '</b>个 · 覆盖 ' + (a.count || 0) + ' 合约 · 仅BTC · 分页可翻历史</small></div>' +
-      '<table class="ud-excel ud-sig">' +
-      '<thead><tr><th>#</th><th>触发时间</th><th>下跌占比</th><th>买入价</th>' +
-      '<th>持1根</th><th>持2根</th><th>持3根</th><th>持5根</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody>' +
-      '<tfoot><tr>' +
-      '<td colspan="3" class="bx-l">胜率 <b>' + (st2.win1 === null || st2.win1 === undefined ? '-' : st2.win1 + '/' + (st2.total || 0)) + '</b></td>' +
-      '<td class="bx">1均收<b class="' + ((st2.avg1 !== null && st2.avg1 >= 0) ? 'num-up' : 'num-dn') + '">' + pct(st2.avg1) + '</b></td>' +
-      '<td class="bx">2均收<b class="' + ((st2.avg2 !== null && st2.avg2 >= 0) ? 'num-up' : 'num-dn') + '">' + pct(st2.avg2) + '</b></td>' +
-      '<td class="bx">3均收<b class="' + ((st2.avg3 !== null && st2.avg3 >= 0) ? 'num-up' : 'num-dn') + '">' + pct(st2.avg3) + '</b></td>' +
-      '<td class="bx">5均收<b class="' + ((st2.avg5 !== null && st2.avg5 >= 0) ? 'num-up' : 'num-dn') + '">' + pct(st2.avg5) + '</b></td>' +
-      '<td class="bx">最佳<b class="num-up">' + pct(st2.best) + '</b><br/>最差<b class="num-dn">' + pct(st2.worst) + '</b></td>' +
-      '</tr></tfoot>' +
-      '</table>' +
-      '<div class="ud-pginfo">第 <b>' + s.spage + '</b> / <b>' + pages + '</b> 页 · 共 <b>' + tn + '</b> 个信号</div>' +
-      '</div>' +
-      /* ★分页条外置固定可见（与详细表格一致） */
-      '<div class="tbl-pg" id="ud-spg-' + UID + '" style="padding:6px 4px 2px">' + pageBtns(pages, s.spage, 'sp') + '</div>' +
-      '<div class="cd-note" style="padding-top:6px;text-align:left">' +
-      '<b>规则</b>：全市场每个时间片统计下跌家数占比；下跌占比连续3根≥50%（市场普跌）后第4根≤20%（恐慌收敛）→ 买入BTC，' +
-      '持有1/2/3/5根后统计涨跌。切换「表格分时」选项卡可看其它分时回测。仅BTC显示买卖信号。</div>' +
-      '<div class="cd-note" id="ud-sigstore-' + UID + '" style="text-align:left;color:#66708a">数据库存档状态加载中…</div>';
-
-    var box = s.el.querySelector('#ud-spg-' + UID);
-    if (box) box.onclick = function (e) {
-      var t = e.target;
-      if (t && t.dataset && t.dataset.sp) {
-        var p = parseInt(t.dataset.sp, 10);
-        if (!isNaN(p)) { s.spage = p; renderSig(); }
-      }
-    };
-    loadSigStore();
-  }
-  function pct(v) { return (v === null || v === undefined) ? '-' : ((v > 0 ? '+' : '') + v.toFixed(2) + '%'); }
-
-  /* 数据库存档状态 */
-  function loadSigStore() {
-    var s = st();
-    Net.get('/api/boards/buysigstore?t=' + Date.now(), { ttl: 20000, timeout: 30000 })
-      .then(function (j) {
-        var el = s.el && s.el.querySelector('#ud-sigstore-' + UID);
-        if (el && j && j.ok) {
-          var ig = j.integrity, parts = [];
-          if (ig && ig.grains && ig.grains.length) {
-            parts = ig.grains.map(function (g) {
-              var dd = (ig.detail || {})[g] || {};
-              var full = (dd.klineStoreOk === dd.klineStoreTotal && dd.klineStoreTotal > 0);
-              return esc(g) + ' 存' + (dd.n || 0) + '条' +
-                (full ? ' ✓' : ' · K线回补中(' + (dd.klineStoreOk || 0) + '/' + (dd.klineStoreTotal || 0) + ')');
-            });
-          }
-          el.innerHTML = '<b>📦 已存档 ' + (j.count || 0) + ' 条</b>（自动落库 buysig.sqlite）· ' + parts.join('　');
-        }
-      }).catch(function () { });
+    mountChan().setGrain(s.tgrain);              // 跟随「表格分时」选项卡, 每个分时各自计算
   }
 
   function mount(elId, opt) {
@@ -768,9 +707,13 @@
       clearInterval(s.timer);
       s.timer = setInterval(function () {
         if (document.hidden) return;
-        loadK();
-        if (s.tgrain !== s.grain) loadT();
-        loadSigs(false);
+      loadK();
+      /* ★2026-10-28 仅「最新一页」自动整表刷新(SSE 已负责顶 2 行秒级跳动);
+       *   一旦用户翻到其它页/回溯历史, 不再整表重拉, 避免打断浏览 + 顶行被覆盖的错觉。
+       *   (历史页数据不变, 整表刷新无收益反而造成闪烁) */
+      if (s.tpage === 1 && !s.tBefore) loadT();
+      /* ★缠论信号定时轻刷新(组件内 60s 缓存, K线连线经 onSignals 回调自动重画) */
+      if (s.chan) s.chan.refresh();
       }, opt.interval);
     }
     return s;
