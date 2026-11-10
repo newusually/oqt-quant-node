@@ -18,9 +18,13 @@
   }
   function aiBjFallback(ts) {
     if (!ts) return '';
+    if (typeof BJTime !== 'undefined') return BJTime.fmt(ts) + ' (北京时间)';
     try { return new Date(ts).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + ' (北京时间)'; }
     catch (e) { return ''; }
   }
+  /* ★统一时间组件（web/js/ui/bjtime.js）：所有时间显示固定 'YYYY-MM-DD HH:mm:ss' 北京时间，不依赖浏览器 locale */
+  var BJ = (typeof BJTime !== 'undefined') ? BJTime
+    : { fmt: aiBjFallback, fmtId: function (id) { return id; }, norm: function (s) { return s; }, short: function (v) { return aiBjFallback(v); } };
   /* ===== 全量 Forensic 渲染：报表 + 归因 + 回测 + 根因 + 代码 ===== */
   /* 单笔交易 → FTable 行 cells（轮次/合约/方向/入场/加仓/出场/净USD/浮亏/归类/持仓） */
   function tradeCells(t) {
@@ -169,7 +173,7 @@
       rows: pg.slice.map(function (s) {
         var net = (s.ev === 'close') ? +s.net : null;
         return [
-          '<span class="mono">' + esc((s.t || '').replace(' (北京时间)', '')) + '</span>',
+          '<span class="mono">' + esc(BJ.norm(s.t)) + '</span>',
           esc(EV_NAMES[s.ev] || s.ev || '—'),
           '<span class="inst">' + esc(s.inst) + '</span>',
           '<span class="' + (s.dir === '多' ? 'up' : 'dn') + '">' + esc(s.dir) + '</span>',
@@ -460,7 +464,7 @@
       return {
         cls: 'hist-row', attrs: 'data-id="' + esc(x.id) + '"',
         cells: [
-          '<span class="mono">' + esc(x.id) + '</span>',
+          '<span class="mono" title="快照ID ' + esc(x.id) + '">' + esc(BJ.norm(x.generatedAtBj || x.id)) + '</span>',
           '<span style="display:inline-block;max-width:270px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom" title="' + esc(x.verdict || '') + '">' + esc((x.verdict || '').slice(0, 60)) + '</span>',
           '<span class="' + (net == null ? 'flat' : (net >= 0 ? 'up' : 'dn')) + '">' + (net == null ? '—' : sgn(net, 4)) + '</span>',
           (x.winRate == null ? '—' : num(x.winRate, 2) + '%'),
@@ -514,7 +518,7 @@
       var w = Math.min(880, vw - 28);
       var ov = document.createElement('div');
       ov.id = 'ft-ai-modal-ov';
-      ov.innerHTML = '<div class="ai-modal"><div class="ai-modal-hd"><h4>🕐 AI 分析详情 · ' + esc(id) +
+      ov.innerHTML = '<div class="ai-modal"><div class="ai-modal-hd"><h4>🕐 AI 分析详情 · ' + esc(BJ.fmtId(id)) +
         '（北京时间）</h4><button class="ai-modal-x" type="button">✕</button></div>' +
         '<div class="ai-modal-bd"><div class="ai-empty">加载中…</div></div></div>';
       document.body.appendChild(ov);
@@ -541,7 +545,7 @@
           var bt = r.backtest || {};
           var autoFix = r.autoFix || {};
           var h = '<div class="ai-verdict"><b>结论 · </b>' + fmt(r.verdict || '（无）') + '</div>' +
-            '<div class="ai-meta-m">🕐 ' + esc(r.generatedAtBj || '') + ' · ' + esc(r.engine || r.source || '') +
+            '<div class="ai-meta-m">🕐 ' + esc(BJ.norm(r.generatedAtBj) || '') + '（北京时间） · ' + esc(r.engine || r.source || '') +
             ' · 净USD <b class="' + ((bt.netUsd || 0) >= 0 ? 'up' : 'dn') + '">' + sgn(bt.netUsd || 0, 4) + '</b>' +
             ' · 胜率 ' + num(bt.winRate, 2) + '%（平 ' + num(bt.closed, 0) + ' / 持 ' + num(bt.open, 0) + '）</div>' +
             (r.rootCause ? '<h5 class="ai-gap">🧭 根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
@@ -568,7 +572,7 @@
   function renderAI(d) {
     var el = document.getElementById('ft-ai'); if (!el) return;
     var r = (d && d.report) || null;
-    var when = r && r.generatedAtBj ? r.generatedAtBj : aiBjFallback(d && d.generatedAt);
+    var when = r && r.generatedAtBj ? BJ.norm(r.generatedAtBj) : aiBjFallback(d && d.generatedAt);
     if (!r) {
       el.innerHTML = '<div class="ai-box"><div class="ai-hd"><h4>🤖 AI 策略分析 · WorkBuddy Hy4</h4>' +
         '<span class="ai-badge warn">等待首次分析</span></div>' +
@@ -618,8 +622,8 @@
       (concl.length ? '<h5 class="ai-gap">✅ 改进与建议（表格）</h5>' + renderConclTable(concl) : '') +
       '<h5 class="ai-gap">🕐 分析数据窗口（北京时间）</h5>' +
       (pb ? '<div class="ai-window">' +
-        '<div><span>起</span>' + esc(pb.from || '—') + '</div>' +
-        '<div><span>止</span>' + esc(pb.to || '—') + '</div>' +
+        '<div><span>起</span>' + esc(BJ.norm(pb.from)) + '</div>' +
+        '<div><span>止</span>' + esc(BJ.norm(pb.to)) + '</div>' +
         '<div><span>跨度</span>' + esc(pb.spanText || '—') + ' · ' + esc(pb.events) + ' 笔事件</div>' +
         '</div>' : '<div class="ai-empty">—</div>') +
       '</div></div>' +
