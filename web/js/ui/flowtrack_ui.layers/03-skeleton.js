@@ -14,10 +14,11 @@
       '<div class="cards" id="ft-cards"></div>' +
       '<div class="foot" id="ft-foot"></div>' +
       /* ★实时持仓列表：交易列表上方，只显示未平仓持仓（监控实时持仓） */
-      '<div class="ft-sec-wrap" id="ft-hold-wrap"><h4 class="ft-sec">👁 实时持仓列表 <span class="live" id="ft-hold-live"><i></i>实时监控</span></h4>' +
+      '<div class="ft-sec-wrap" id="ft-hold-wrap"><h4 class="ft-sec">👁 实时持仓列表 <span class="live" id="ft-hold-live"><i></i>实时监控</span> <span class="sub" id="ft-hold-count" style="margin-left:8px"></span></h4>' +
       '<div class="tw"><table id="ft-hold-tbl"><thead><tr>' +
       '<th>合约</th><th>方向</th><th>周期</th><th>开仓价</th><th>现价</th><th>均价</th><th>数量</th><th>浮盈浮亏%</th><th>净浮盈USD</th><th>加仓次数</th><th>开仓时间</th>' +
-      '</tr></thead><tbody id="ft-hold-rows"></tbody></table></div></div>' +
+      '</tr></thead><tbody id="ft-hold-rows"></tbody></table></div>' +
+      '<div class="pager" id="ft-hold-pager"></div></div>' +
       '<div class="bar"><span class="lbl">周期</span><div class="tabs" id="ft-tabs"></div>' +
       '<span class="lbl">类型</span><div class="tabs" id="ft-evtabs"></div>' +
       '<span class="sbtn" id="ft-sort" title="按净USD排序">最新在前 ⇅</span></div>' +

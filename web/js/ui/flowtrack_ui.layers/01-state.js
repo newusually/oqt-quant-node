@@ -9,6 +9,7 @@
   var curveState = { off: 0, vis: DEF_VIS, anchorX: null };  // off>0=看历史, off<0=右侧留白; anchorX=缩放圆心
   var cv = null, cvCtx = null, cvTip = null, curveBound = false, curveDrag = null, curveHover = -1;
   var activePage = 1, activeSort = '', tfFilter = 'all', evFilter = 'all';
+  var holdPage = 1, HOLD_PAGE_SIZE = 10;   // 实时持仓列表客户端分页
   /* 只保留 15m */
   var TF_TABS = [
     { id: 'all', label: '全部周期' }, { id: '15m', label: '15分钟' }

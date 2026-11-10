@@ -47,14 +47,23 @@
     });
   }
 
-  /* ===================== 实时持仓列表（只显未平仓） ===================== */
+  /* ===================== 实时持仓列表（只显未平仓）· 客户端分页 ===================== */
   function renderHolding(rows) {
     var tb = document.getElementById('ft-hold-rows'); if (!tb) return;
+    var cnt = document.getElementById('ft-hold-count');
     if (!rows || !rows.length) {
       tb.innerHTML = '<tr><td colspan="11" class="empty">当前无未平仓持仓</td></tr>';
+      if (cnt) cnt.textContent = '持仓合计 0 条';
+      var pg0 = document.getElementById('ft-hold-pager'); if (pg0) pg0.innerHTML = '';
       return;
     }
-    tb.innerHTML = rows.map(function (r) {
+    var total = rows.length;
+    var tp = Math.max(1, Math.ceil(total / HOLD_PAGE_SIZE));
+    if (holdPage < 1) holdPage = 1;
+    if (holdPage > tp) holdPage = tp;
+    var start = (holdPage - 1) * HOLD_PAGE_SIZE;
+    var pageRows = rows.slice(start, start + HOLD_PAGE_SIZE);
+    tb.innerHTML = pageRows.map(function (r) {
       var dirCls = r.dir === '多' ? 'up' : 'dn';
       return '<tr class="r" data-inst="' + esc(r.inst) + '">' +
         '<td><span class="inst" data-inst="' + esc(r.inst) + '">' + esc(r.inst) + '</span></td>' +
@@ -73,4 +82,23 @@
     paintTable(tb.parentNode);
     bindInstClicks(tb);
     bindRowClicks(tb);
+    if (cnt) cnt.textContent = '持仓合计 ' + total + ' 条（第 ' + holdPage + '/' + tp + ' 页）';
+    renderHoldPager(tp);
+  }
+
+  function renderHoldPager(tp) {
+    var el = document.getElementById('ft-hold-pager'); if (!el) return;
+    var p = holdPage;
+    var html = '<span class="pg' + (p <= 1 ? ' dis' : '') + '" data-pg="' + (p - 1) + '">‹ 上一页</span>';
+    var from = Math.max(1, p - 3), to = Math.min(tp, from + 6); from = Math.max(1, to - 6);
+    for (var i = from; i <= to; i++) html += '<span class="pg' + (i === p ? ' on' : '') + '" data-pg="' + i + '">' + i + '</span>';
+    html += '<span class="pg' + (p >= tp ? ' dis' : '') + '" data-pg="' + (p + 1) + '">下一页 ›</span>';
+    el.innerHTML = html;
+    [].forEach.call(el.querySelectorAll('.pg'), function (b) {
+      b.onclick = function () {
+        var pg = parseInt(b.getAttribute('data-pg'), 10);
+        if (!pg || pg < 1 || pg > tp || pg === p) return;
+        holdPage = pg; renderHolding(lastOpen);
+      };
+    });
   }
