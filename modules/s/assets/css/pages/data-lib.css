@@ -1,0 +1,84 @@
+/* data-lib.css — 页面层 / 数据宝库 */
+.dlp .dl-stats { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-bottom: 10px; }
+.dlp .dl-stat {
+  background: #fff8e1; border: 1.5px solid #ffe0b2; border-radius: 999px;
+  padding: 4px 14px; margin: 3px 6px 3px 0; font-size: 13px; color: #6b5640;
+}
+.dlp .dl-stat b { color: #e65100; font-size: 15px; margin-right: 2px; }
+.dlp .dl-sets { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-bottom: 10px; }
+.dlp .dl-set {
+  display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+  border: 2px solid #ffe0b2; background: #fffdf7; border-radius: 12px;
+  padding: 6px 10px; margin: 4px 6px 4px 0; cursor: pointer; font-size: 13px; color: #5d4037;
+}
+.dlp .dl-set.on { border-color: #ff8f00; background: #fff3e0; color: #e65100; font-weight: bold; }
+.dlp .dl-ic { font-size: 18px; margin-right: 6px; }
+.dlp .dl-pg { font-size: 11px; color: #9b8a72; margin-left: 8px; }
+.dlp .dl-bar { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; margin-bottom: 8px; }
+.dlp .dl-search {
+  -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; min-width: 180px;
+  border: 2px solid #ffd9a8; border-radius: 999px; padding: 8px 16px; font-size: 14px;
+  outline: none; margin-right: 8px; background: #fff;
+}
+.dlp .dl-search:focus { border-color: #ff8f00; }
+.dlp .dl-pagebar { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between; margin: 6px 0; }
+.dlp .dl-pginfo { font-size: 14px; color: #5d4037; }
+.dlp .dl-pginfo b { color: #e65100; font-size: 17px; }
+.dlp .dl-jump { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; -webkit-box-align: center; -webkit-align-items: center; align-items: center; font-size: 12px; color: #9b8a72; margin-bottom: 8px; }
+.dlp .dl-jp {
+  border: 1.5px solid #ffe0b2; background: #fff; border-radius: 8px;
+  min-width: 30px; margin: 2px 3px; padding: 3px 6px; font-size: 12px; cursor: pointer; color: #5d4037;
+}
+.dlp .dl-jp.on { background: #ff8f00; border-color: #ff8f00; color: #fff; font-weight: bold; }
+.dlp .dl-items { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.dlp .dl-item {
+  width: 104px; margin: 5px; padding: 8px 6px; text-align: center; cursor: pointer;
+  background: #fffdf7; border: 2px solid #ffe0b2; border-radius: 12px;
+  -webkit-transition: -webkit-transform .12s; transition: transform .12s;
+}
+.dlp .dl-item:hover { -webkit-transform: translateY(-3px); transform: translateY(-3px); border-color: #ffb74d; }
+.dlp .dl-hz { font-size: 34px; font-weight: bold; color: #e65100; font-family: KaiTi, STKaiti, serif; line-height: 1.15; }
+.dlp .dl-py { display: block; font-size: 12px; color: #78909c; font-family: sans-serif; }
+.dlp .dl-wd { font-size: 20px; font-weight: bold; color: #e65100; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-en b { display: block; font-size: 15px; color: #1565c0; }
+.dlp .dl-en .dl-emoji { font-size: 24px; display: block; }
+.dlp .dl-en .dl-ph { display: block; font-size: 11px; color: #90a4ae; }
+.dlp .dl-en .dl-cn { display: block; font-size: 12px; color: #5d4037; }
+.dlp .dl-num b { display: block; font-size: 30px; color: #e65100; }
+.dlp .dl-num span { display: block; font-size: 13px; color: #5d4037; }
+.dlp .dl-mul b { display: block; font-size: 15px; color: #e65100; }
+.dlp .dl-mul span { display: block; font-size: 11px; color: #9b8a72; }
+.dlp .dl-unit b { display: block; font-size: 16px; color: #e65100; }
+.dlp .dl-unit .dl-sym { font-size: 12px; color: #1565c0; margin-left: 4px; }
+.dlp .dl-unit span { display: block; font-size: 11px; color: #5d4037; line-height: 1.5; }
+.dlp .dl-unit .dl-eg { color: #9b8a72; }
+.dlp .dl-shape b { display: block; font-size: 16px; color: #e65100; }
+.dlp .dl-shape .dl-en2 { font-size: 11px; color: #1565c0; display: block; }
+.dlp .dl-shape span { display: block; font-size: 11px; color: #5d4037; line-height: 1.5; }
+.dlp .dl-shape .dl-eg { color: #9b8a72; }
+.dlp .dl-empty { text-align: center; color: #9b8a72; padding: 20px; font-size: 14px; }
+
+/* 成语 / 古诗 / 蒙学 / 作文 / 方法 / 拼读 / 公式 */
+.dlp .dl-idiom { text-align: center; padding: 10px 6px; }
+.dlp .dl-idiom b { display: block; font-size: 17px; color: #6a1b9a; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-idiom .dl-py { display: block; font-size: 11px; color: #9575cd; margin: 2px 0; }
+.dlp .dl-idiom span { display: block; font-size: 11px; color: #7e6a55; line-height: 1.5; text-align: left; }
+.dlp .dl-poem { text-align: center; padding: 8px 6px; }
+.dlp .dl-poem b { display: block; font-size: 16px; color: #c62828; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-poem .dl-au { display: block; font-size: 11px; color: #8d6e63; margin: 1px 0 3px; }
+.dlp .dl-poem p { margin: 0; font-size: 13px; line-height: 1.7; color: #3e2723; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-poem .dl-g1 { display: inline-block; font-size: 10px; background: #ffecb3; color: #e65100; border-radius: 8px; padding: 1px 6px; margin-bottom: 3px; }
+.dlp .dl-meng b { display: block; font-size: 14px; color: #2e7d32; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-meng span { display: block; font-size: 12px; line-height: 1.7; color: #3e2723; font-family: KaiTi, STKaiti, serif; }
+.dlp .dl-meng .dl-py { font-size: 11px; color: #78909c; }
+.dlp .dl-essay b { display: block; font-size: 15px; color: #e65100; }
+.dlp .dl-essay .dl-chip { display: inline-block; font-size: 10px; background: #e3f2fd; color: #1565c0; border-radius: 8px; padding: 1px 6px; margin-left: 4px; }
+.dlp .dl-essay span { display: block; font-size: 12px; color: #5d4037; line-height: 1.6; margin-top: 4px; }
+.dlp .dl-method b { display: block; font-size: 15px; color: #00695c; }
+.dlp .dl-method span { display: block; font-size: 12px; color: #37474f; line-height: 1.6; margin-top: 4px; }
+.dlp .dl-phonics b { display: block; font-size: 15px; color: #283593; }
+.dlp .dl-phonics .dl-s { display: block; font-size: 12px; color: #e65100; margin: 2px 0; }
+.dlp .dl-phonics span { display: block; font-size: 11px; color: #455a64; }
+.dlp .dl-formula b { display: block; font-size: 15px; color: #b71c1c; }
+.dlp .dl-formula span { display: block; font-size: 12px; color: #37474f; line-height: 1.6; margin-top: 3px; }
+.dlp .dl-formula .dl-eg { display: block; font-size: 11px; color: #6d4c41; margin-top: 3px; font-style: italic; }

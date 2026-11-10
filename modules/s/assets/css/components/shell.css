@@ -1,0 +1,188 @@
+/*
+ * shell.css — 组件层 / 全站外壳（Vue site-shell）
+ * 顶栏右侧（星星/徽章/自动朗读开关）、徽章弹层、学习档案、场景标签等。
+ * 规范：不用 gap/inset/min()/clamp()，flex 全部带 -webkit- 前缀。
+ */
+.tb-right {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+}
+.tb-star {
+  font-size: 14px;
+  font-weight: bold;
+  color: #e65100;
+  background: #fff3e0;
+  border-radius: 12px;
+  padding: 4px 9px;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+/* ★自动朗读常开指示（不可关闭，纯展示） */
+.tb-spk-on {
+  font-size: 13px;
+  font-weight: bold;
+  color: #1b5e20;
+  background: #e8f5e9;
+  border-radius: 12px;
+  padding: 4px 10px;
+  margin-right: 6px;
+  white-space: nowrap;
+  cursor: default;
+  animation: spk-pulse 2.2s ease-in-out infinite;
+}
+@keyframes spk-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76,175,80,.35); }
+  50% { box-shadow: 0 0 0 5px rgba(76,175,80,0); }
+}
+.tb-badges {
+  cursor: pointer;
+  font-size: 15px;
+  letter-spacing: 1px;
+  margin-right: 6px;
+  padding: 3px 6px;
+  border-radius: 12px;
+  background: #fff8e1;
+  border: 1px dashed #ffcc80;
+}
+.tb-badges em { font-style: normal; }
+.tb-badges em.off { opacity: .35; -webkit-filter: grayscale(1); filter: grayscale(1); }
+
+.badge-pop {
+  background: #fff;
+  border: 2px solid #ffe0b2;
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  -webkit-box-shadow: 0 4px 14px rgba(120, 90, 40, 0.12);
+  box-shadow: 0 4px 14px rgba(120, 90, 40, 0.12);
+}
+.badge-pop .bp-title { font-size: 15px; font-weight: bold; color: #f4511e; margin-bottom: 6px; }
+.badge-pop .bp-grid { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.badge-pop .bp-item {
+  width: 108px; margin: 5px; padding: 8px 6px; text-align: center;
+  background: #fff8e1; border: 2px solid #ffe0b2; border-radius: 12px;
+}
+.badge-pop .bp-item.off { opacity: .45; -webkit-filter: grayscale(1); filter: grayscale(1); }
+.badge-pop .bp-i { display: block; font-size: 26px; }
+.badge-pop .bp-n { display: block; font-size: 13px; font-weight: bold; color: #5a3a1e; margin-top: 2px; }
+.badge-pop .bp-d { display: block; font-size: 11px; color: #9b8a72; line-height: 1.4; margin-top: 2px; }
+
+/* 声音选择面板 */
+.voice-pop {
+  background: #fff;
+  border: 2px solid #b3e5fc;
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  -webkit-box-shadow: 0 4px 14px rgba(30, 120, 180, 0.14);
+  box-shadow: 0 4px 14px rgba(30, 120, 180, 0.14);
+}
+.voice-pop .vp-title { font-size: 15px; font-weight: bold; color: #0277bd; margin-bottom: 4px; }
+.voice-pop .vp-close { float: right; cursor: pointer; color: #90a4ae; padding: 0 4px; }
+.voice-pop .vp-sub { font-size: 12px; color: #78909c; margin: 8px 0 4px; }
+.voice-pop .vlist { max-height: 210px; overflow-y: auto; }
+.voice-pop .vitem {
+  display: -webkit-box; display: -webkit-flex; display: flex;
+  -webkit-box-align: center; -webkit-align-items: center; align-items: center;
+  padding: 7px 8px; margin: 3px 0; border-radius: 10px; cursor: pointer;
+  background: #f5fbff; border: 1.5px solid #e1f0fa;
+}
+.voice-pop .vitem:hover { background: #e8f4fd; }
+.voice-pop .vitem.on { background: #fff3e0; border-color: #ffb74d; }
+.voice-pop .vradio { margin-right: 8px; font-size: 13px; }
+.voice-pop .vlabel { -webkit-box-flex: 1; -webkit-flex: 1; flex: 1; font-size: 14px; font-weight: bold; color: #37474f; }
+.voice-pop .vitem.on .vlabel { color: #e65100; }
+.voice-pop .vlang { font-size: 11px; color: #90a4ae; margin-right: 8px; }
+.voice-pop .vtry {
+  border: none; background: #0288d1; color: #fff; font-size: 12px;
+  padding: 4px 10px; border-radius: 999px; cursor: pointer;
+}
+.voice-pop .vtry:active { background: #01579b; }
+.voice-pop .vp-empty { font-size: 13px; color: #78909c; padding: 10px; text-align: center; }
+.voice-pop .vitem.cloud { background: #f6f0ff; border-color: #e1d4f7; }
+.voice-pop .vitem.cloud:hover { background: #efe6fc; }
+.voice-pop .vitem.cloud.on { background: #f3e5f5; border-color: #ab47bc; }
+.voice-pop .vitem.cloud.on .vlabel { color: #6a1b9a; }
+.voice-pop .vitem.style { background: #f1f8e9; border-color: #dcedc8; }
+.voice-pop .vitem.style:hover { background: #e6f2da; }
+.voice-pop .vitem.style.on { background: #fff8e1; border-color: #ffb74d; }
+.voice-pop .vitem.style.on .vlabel { color: #e65100; }
+.voice-pop .vp-sub2 { font-size: 11px; color: #90a4ae; margin: 6px 0 2px; }
+.voice-pop .vp-local { margin: 4px 0 6px; }
+.voice-pop .vp-using { font-size: 12px; color: #2e7d32; font-weight: bold; }
+.voice-pop .vp-foot { margin-top: 8px; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; -webkit-box-align: center; -webkit-align-items: center; align-items: center; }
+.voice-pop .vp-tip { font-size: 11px; color: #90a4ae; margin-left: 8px; }
+/* 顶部说明：试听只是预览 */
+.voice-pop .vp-note {
+  font-size: 12px; line-height: 1.5; color: #5d4037; background: #fff8e1;
+  border: 1px dashed #ffb74d; border-radius: 8px; padding: 6px 8px; margin: 6px 0 2px;
+}
+.voice-pop .vp-note b { color: #e65100; }
+/* 声音自检块：现在能不能出声 */
+.voice-pop .vp-diag {
+  background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px;
+  padding: 7px 9px; margin: 6px 0 2px; font-size: 12px; line-height: 1.55; color: #2e7d32;
+}
+.voice-pop .vp-diag.bad { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
+.voice-pop .vp-diag-t { font-weight: 700; }
+.voice-pop .vp-diag-b { margin-top: 6px; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; gap: 6px; }
+.voice-pop .vp-diag-b .btn { font-size: 12px; padding: 4px 9px; min-height: 0; }
+.voice-pop .vp-diag-d { margin-top: 5px; font-size: 11px; line-height: 1.5; opacity: .85; }
+/* 默认嗓音在这台设备缺失时的说明块 */
+.voice-pop .vp-warn {
+  background: #eceff1; border: 1px solid #b0bec5; border-radius: 8px;
+  padding: 7px 9px; margin: 6px 0 2px; font-size: 12px; line-height: 1.55; color: #37474f;
+}
+.voice-pop .vp-warn-t { font-weight: 700; color: #c62828; margin-bottom: 3px; font-size: 12.5px; }
+.voice-pop .vp-warn-d b { color: #1565c0; }
+.voice-pop .vp-warn-b { margin-top: 6px; display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.voice-pop .vp-warn-b .btn { font-size: 12px; padding: 4px 8px; margin: 0 6px 4px 0; }
+.voice-pop .vp-warn-b .btn.ghost { background: #fff; color: #455a64; border-color: #90a4ae; }
+.voice-pop .vp-how {
+  margin-top: 5px; padding: 6px 8px; background: #fff; border: 1px dashed #90a4ae;
+  border-radius: 6px; color: #455a64; font-size: 11.5px;
+}
+.voice-pop .vp-how div { margin: 2px 0; }
+.voice-pop .vp-how b { color: #1565c0; }
+/* 保存按钮：有未保存改动时高亮提示 */
+.voice-pop .vp-foot .btn.vsave { background: #43a047; border-color: #2e7d32; color: #fff; }
+.voice-pop .vp-foot.dirty .btn.vsave {
+  background: #ff8f00; border-color: #e65100; color: #fff;
+  -webkit-animation: vpBlink 1.2s ease-in-out infinite; animation: vpBlink 1.2s ease-in-out infinite;
+}
+.voice-pop .vp-foot.dirty .vp-tip { color: #e65100; font-weight: bold; }
+@-webkit-keyframes vpBlink { 0%,100% { -webkit-transform: scale(1); transform: scale(1); } 50% { -webkit-transform: scale(1.05); transform: scale(1.05); } }
+@keyframes vpBlink { 0%,100% { -webkit-transform: scale(1); transform: scale(1); } 50% { -webkit-transform: scale(1.05); transform: scale(1.05); } }
+
+/* 主页学习档案 */
+.home-stat { text-align: center; }
+.home-stat .hs-title { font-size: 17px; font-weight: bold; color: #f4511e; margin-bottom: 8px; }
+.home-stat .hs-row {
+  display: -webkit-box; display: -webkit-flex; display: flex;
+  -webkit-box-pack: justify; -webkit-justify-content: space-between; justify-content: space-between;
+  font-size: 14px; color: #6b5640; padding: 6px 10px; margin: 4px 0;
+  background: #fff8e1; border-radius: 10px;
+}
+.home-stat .hs-row b { color: #e65100; }
+.home-stat .hs-badges { font-size: 24px; letter-spacing: 4px; margin: 8px 0 4px; }
+.home-stat .hs-badges span.off { opacity: .35; -webkit-filter: grayscale(1); filter: grayscale(1); }
+
+/* 场景行标签（应用题里的 👦 / 👧） */
+.scene .rlabel { font-size: 22px; margin-right: 4px; }
+.scap { font-size: 13px; color: #888; margin-top: 6px; text-align: center; }
+
+/* 顶部工具条（各页小按钮组） */
+.gbar, .lvbar { text-align: center; margin-bottom: 10px; }
+.gbar .btn, .lvbar .lv { margin: 3px 5px; }
+.lp-actions { text-align: center; margin: 8px 0; }
+
+/* 写作/仿写配图 */
+.imit-pic { text-align: center; margin-bottom: 8px; }
+.imit-pic svg { width: 84px; height: 84px; }
+
+/* 教案中心按钮微调 */
+.lp-grades .gbtn, .lp-subjects .sbtn { -webkit-user-select: none; user-select: none; }

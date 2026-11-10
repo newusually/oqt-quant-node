@@ -1,0 +1,52 @@
+/* ============================================================
+ * chan-pop.css — 悬浮迷你K线窗样式（对应 latest 的 okxpop.css）
+ * ============================================================ */
+.chanpop {
+  position: fixed;
+  right: 18px;
+  top: 64px;
+  z-index: 9000;
+  width: 520px;
+  max-width: 92vw;
+  background: var(--panel, #12172a);
+  border: 1px solid var(--line, #26304a);
+  border-radius: 10px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .55);
+  display: none;
+  overflow: hidden;
+}
+.chanpop.on { display: block; }
+.chanpop-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line, #26304a);
+  font-size: 12px;
+  color: var(--txt2, #8b94ad);
+}
+.chanpop-t { color: var(--txt, #d7dcea); font-weight: 700; font-size: 13px; }
+.chanpop-s { font-size: 11px; }
+.chanpop-x { cursor: pointer; padding: 0 4px; color: var(--txt2, #8b94ad); }
+.chanpop-x:hover { color: #ff6b7d; }
+.chanpop-bd { position: relative; padding: 0; }
+.chanpop-bd canvas { display: block; width: 100%; height: 260px; background: #0b0f18; }
+.chanpop-empty-ov {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(11, 15, 24, .82);
+  color: var(--txt2, #8b94ad);
+  font-size: 13px;
+}
+.chanpop-legend {
+  border-top: 1px solid var(--line, #26304a);
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  color: var(--txt2, #8b94ad);
+}
+.chanpop-leg-t { color: var(--txt, #d7dcea); font-weight: 700; margin-bottom: 4px; }
+.chanpop-leg-r { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.chanpop-leg-r b { color: var(--txt, #d7dcea); font-weight: 600; }
+.chanpop-leg-r b.up { color: #f0334b; }
+.chanpop-leg-r b.dn { color: #0bbf7a; }
+.chanpop-leg-r b.muted { color: var(--txt2, #8b94ad); }

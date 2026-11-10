@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>孩子保命有妙招108招（动漫版） - 一年级趣味学习乐园</title>
+<meta name="description" content="108条儿童安全保命技能，12大类全覆盖：交通、消防、防溺水、居家、用电、食品、防拐骗、校园、自然灾害、网络安全、急救自救、户外动物。每招都有动漫漫画、好记口诀、正确做法和情景测验。">
+<meta name="keywords" content="儿童安全教育,儿童自救108招,小学安全知识,防拐骗,消防安全,防溺水">
+<link rel="stylesheet" href="assets/css/base/reset.css">
+<link rel="stylesheet" href="assets/css/base/layout.css">
+<link rel="stylesheet" href="assets/css/components/ui.css">
+<link rel="stylesheet" href="assets/css/components/shell.css">
+<link rel="stylesheet" href="assets/css/compat.css">
+<script>
+(function () {
+  var h = document.documentElement;
+  var d = document.createElement('div').style;
+  if (!('flexWrap' in d) && !('WebkitFlexWrap' in d)) h.className += ' no-flex';
+  if (typeof Promise === 'undefined' || typeof Function.prototype.bind === 'undefined') h.className += ' old-kernel';
+})();
+</script>
+<link rel="stylesheet" href="/web/css/overview.css">
+</head>
+<body>
+<noscript><div class="wrap"><div class="card">😢 这个页面需要打开 JavaScript 才能学习哦。</div></div></noscript>
+<div id="app" data-view="safety"></div>
+
+<script src="assets/js/vendor/vue.global.prod.js?v=20261028b"></script>
+<script src="assets/js/core/compat.js?v=20261028b"></script>
+<script src="assets/js/core/config.js?v=20261028b"></script>
+<script src="assets/js/core/utils.js?v=20261028b"></script>
+<script src="assets/js/core/store.js?v=20261028b"></script>
+<script src="assets/js/core/shell.js?v=20261028b"></script>
+<script src="assets/js/core/seo.js?v=20261028b"></script>
+<script src="assets/js/services/speech.js?v=20261028b"></script>
+<!-- 动漫场景生成器 + 分类表 + 108招数据（4个分片） -->
+<script src="assets/js/services/safety-art.js?v=20261028b"></script>
+<script src="assets/js/data/safety/safety-index.js?v=20261028b"></script>
+<script src="assets/js/data/safety/safety-data-a.js?v=20261028b"></script>
+<script src="assets/js/data/safety/safety-data-b.js?v=20261028b"></script>
+<script src="assets/js/data/safety/safety-data-c.js?v=20261028b"></script>
+<script src="assets/js/data/safety/safety-data-d.js?v=20261028b"></script>
+<script src="assets/js/views/safety-view.js?v=20261028b"></script>
+<script src="assets/js/app.js?v=20261028b"></script>
+
+<script src="/web/js/announcer.js"></script>
+<script src="/web/js/page-common.js"></script>
+<script>
+/* 进页面播报一次 */
+(function () {
+  function go() {
+    if (window.App && window.App.Speech) {
+      window.App.Speech.speak('欢迎来到保命妙招一百零八招！这里有保护自己的一百零八个本事，点开一个大类，跟着漫画学起来吧');
+    }
+  }
+  if (window.PageCommon) window.PageCommon.showLoader('正在准备保命妙招…');
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(go, 900); });
+  else setTimeout(go, 900);
+})();
+</script>
+</body>
+</html>

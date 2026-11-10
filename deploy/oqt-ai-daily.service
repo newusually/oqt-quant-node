@@ -1,0 +1,14 @@
+[Unit]
+Description=OQT Quant · 每日 AI 策略分析（CodeBuddy / Hy4）
+After=network-online.target oqt-quant-node.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/ubuntu/oqt-quant-node
+Environment=HOME=/root
+Environment=CODEBUDDY_CONFIG_DIR=/root/.codebuddy
+Environment="AI_MODELS=hy4-preview hy3 deepseek-v4.1-flash default-model"
+ExecStart=/bin/bash /home/ubuntu/oqt-quant-node/scripts/ai_daily.sh
+TimeoutStartSec=1800

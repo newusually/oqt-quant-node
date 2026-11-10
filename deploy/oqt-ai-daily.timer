@@ -1,0 +1,11 @@
+[Unit]
+Description=OQT Quant · 每日零点运行 AI 策略分析
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+AccuracySec=1m
+Persistent=true
+Unit=oqt-ai-daily.service
+
+[Install]
+WantedBy=timers.target

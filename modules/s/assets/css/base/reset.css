@@ -1,0 +1,44 @@
+/*
+ * reset.css — 基础层 / 重置与变量
+ * 兼容：不使用 gap / inset / min() / clamp() / 未加前缀的 backdrop-filter，保证微信/QQ/钉钉 X5 老内核可用。
+ */
+* { margin: 0; padding: 0; -webkit-box-sizing: border-box; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: "Comic Sans MS", "Yuanti SC", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Heiti SC", sans-serif;
+  color: #4a3b2a;
+  background: #eaf6ff;
+  background: -webkit-linear-gradient(180deg, #eaf6ff 0%, #fff7ec 100%);
+  background: linear-gradient(180deg, #eaf6ff 0%, #fff7ec 100%);
+  background-attachment: fixed;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+img, svg { display: block; max-width: 100%; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+ul { list-style: none; }
+
+/* 设计变量（兼容老内核：变量不被支持时由下方具体规则兜底，故关键颜色都写死在具体类里） */
+:root {
+  --c-primary: #ff7a45;
+  --c-primary-d: #f4511e;
+  --c-teal: #26c6da;
+  --c-yellow: #ffd54f;
+  --c-green: #66bb6a;
+  --c-pink: #ff8a80;
+  --c-purple: #ab47bc;
+  --c-ink: #4a3b2a;
+  --c-card: #ffffff;
+  --c-shadow: rgba(120, 90, 40, 0.18);
+  --radius: 18px;
+}
+
+/* 文本高亮（题目中数字） */
+b { color: #f4511e; }
+
+/* 通用辅助类 */
+.center { text-align: center; }
+.hide { display: none !important; }
+.clearfix:after { content: ""; display: block; clear: both; }

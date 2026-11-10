@@ -1,0 +1,87 @@
+/*
+ * learn.css — 组件层 / 语文学习小课堂（拼音 · 认字 · 组词造句 · 课文 · 知识点）
+ */
+/* 拼音 */
+.pysec { margin-bottom: 12px; }
+.pyh { font-size: 15px; color: #e65100; font-weight: bold; margin-bottom: 6px; }
+.pyrow { line-height: 2.2; }
+.pychip {
+  display: inline-block;
+  margin: 3px;
+  padding: 6px 12px;
+  font-size: 18px;
+  color: #5d4037;
+  background: #fff3e0;
+  border: 2px solid #ffd9a8;
+  border-radius: 14px;
+  cursor: pointer;
+}
+.pychip i { font-style: normal; font-size: 12px; color: #9b8a72; margin-left: 4px; }
+
+/* 认字卡片 */
+.chargrid {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+.charcard {
+  width: 92px;
+  margin: 6px;
+  padding: 10px 6px;
+  text-align: center;
+  background: #fff;
+  border: 2px solid #ffe0b2;
+  border-radius: 16px;
+  cursor: pointer;
+  -webkit-transition: -webkit-transform .12s;
+  transition: transform .12s;
+}
+.charcard:hover { -webkit-transform: translateY(-3px); transform: translateY(-3px); }
+.charbig { font-size: 40px; color: #e65100; font-weight: bold; line-height: 1.1; }
+.charpy { font-size: 16px; color: #9b8a72; margin: 2px 0; min-height: 20px; }
+.charimg { min-height: 40px; }
+
+/* 组词造句练习 */
+#pracBox { margin-top: 10px; }
+#pracNext { margin-top: 12px; }
+
+/* 课文 */
+.textlist { margin-top: 6px; }
+.textitem {
+  background: #fff;
+  border: 2px solid #ffe0b2;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.textitem .ttitle { font-size: 17px; color: #e65100; font-weight: bold; }
+.textitem .tbody { margin-top: 8px; font-size: 16px; color: #4a3b2a; line-height: 1.9; }
+.textitem .hint { text-align: left; }
+
+/* 知识点总结 */
+.kpwrap {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+}
+.kpcol {
+  -webkit-box-flex: 1;
+  -webkit-flex: 1 1 220px;
+  flex: 1 1 220px;
+  margin: 6px;
+  background: #fff8ef;
+  border: 2px solid #ffd9a8;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.kphead { font-size: 16px; color: #e65100; font-weight: bold; margin-bottom: 6px; }
+.kpcol ul { margin-left: 18px; }
+.kpcol li { list-style: disc; margin: 4px 0; font-size: 14px; color: #5d4037; }

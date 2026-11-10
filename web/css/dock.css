@@ -1,0 +1,70 @@
+/* ============================================================
+ * dock.css — 自由布局样式（移植自 latest web/src/css/view/dock.css）
+ *   面板可拖动 / 缩放 / 悬浮 / 隐藏 / 删除 / 复位
+ * ============================================================ */
+
+/* dock 空间: flex 流式容器(面板像磁贴一样自动排布, 可拖动插入到任意位置) */
+#dockSpace {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 12px;
+  padding: 12px;
+  min-height: 70vh;
+}
+
+/* 面板(卡片): flex 项 */
+.dock-on .dock-panel { border-radius: 4px; }
+.dock-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  min-height: 120px;
+  margin: 0;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.dock-panel:hover { box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.dock-panel > h3, .dock-panel > h2, .dock-panel > .card-h { cursor: grab; user-select: none; }
+.dock-panel > h3:active, .dock-panel > h2:active { cursor: grabbing; }
+
+/* 面板体在自由布局下占满剩余高度 */
+.dock-on .dock-panel { overflow: hidden; }
+.dock-on .dock-panel > *:not(h3):not(h2):not(.card-h):not(.dock-tb):not([data-dock-h]) {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+}
+
+/* 浮动模式: 脱离 flex 流, 任意 XY 摆放 */
+.dock-panel.dock-float {
+  position: fixed;
+  z-index: 60;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+}
+
+/* 边/角缩放手柄: 八方向 */
+.dock-h { position: absolute; z-index: 80; }
+.dock-h-n  { top: 0;    left: 10px; right: 10px; height: 10px; cursor: ns-resize; }
+.dock-h-s  { bottom: 0; left: 10px; right: 10px; height: 10px; cursor: ns-resize; }
+.dock-h-w  { left: 0;   top: 10px;  bottom: 10px; width: 10px;  cursor: ew-resize; }
+.dock-h-e  { right: 0;  top: 10px;  bottom: 10px; width: 10px;  cursor: ew-resize; }
+.dock-h-ne { top: 0;    right: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+.dock-h-nw { top: 0;    left: 0;  width: 18px; height: 18px; cursor: nwse-resize; }
+.dock-h-se { bottom: 0; right: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+.dock-h-sw { bottom: 0; left: 0;  width: 18px; height: 18px; cursor: nesw-resize; }
+
+/* 面板工具条(悬浮/隐藏/删除) */
+.dock-tb {
+  position: absolute; right: 6px; top: 6px; z-index: 90;
+  display: flex; gap: 4px; align-items: center;
+  opacity: 0; transition: opacity .15s ease;
+}
+.dock-panel:hover .dock-tb { opacity: 1; }
+.dock-tb-t { width: 8px; height: 8px; }
+.dock-tb-b {
+  width: 22px; height: 22px; line-height: 1;
+  background: rgba(18, 23, 42, .92); border: 1px solid #26304a; border-radius: 5px;
+  color: #d7dcea; font-size: 12px; cursor: pointer; padding: 0;
+}
+.dock-tb-b:hover { border-color: #f0a020; color: #f0a020; }
+body.dock-dragging { user-select: none; }
+body.dock-dragging * { cursor: grabbing !important; }

@@ -1,0 +1,35 @@
+/*
+ * brace.css — 组件层 / 大括号（花括号）
+ * 配合 services/brace.js 使用：JS 量宽画 SVG，这里管间距、标签与动画兜底。
+ * 老版的 .brace 是一条 border-bottom 直线（quiz.css），已由本组件取代。
+ */
+.yb-brace {
+  position: relative;
+  text-align: center;
+  margin: 6px auto 2px;
+  line-height: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.yb-brace .yb-brace-svg {
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+}
+/* 括号下面的标签（？个 / 一共几个 …） */
+.yb-brace-label {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 21px;
+  font-weight: bold;
+  line-height: 1.4;
+  color: #e65100;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+/* 口算课堂的括号台：给括号留出固定高度，避免动画时抖动 */
+.ab-stage .yb-brace {
+  min-height: 26px;
+}
+.ab-stage .yb-brace-label {
+  font-size: 22px;
+}

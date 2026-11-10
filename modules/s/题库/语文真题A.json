@@ -1,0 +1,25 @@
+{
+  "type": "chinese",
+  "name": "一年级语文期末真题A（看拼音/反义词/量词/课文）",
+  "说明": "题目来自网络真实一年级语文期末卷。type=choice 选择题（opts 选项数组，ans 正确项下标）；type=match 连线题（pairs 为反义词对，left/right 为左右两列）；type=speak 看图说话。kp=知识点；teach=答错讲解；speakAns=语音答案。",
+  "questions": [
+    { "type": "choice", "tag": "看拼音写词", "kp": "拼音", "teach": "péng 朋 yǒu 友，连起来是'朋友'。", "say": "看拼音，选词语：péng yǒu。", "html": "<div class='py' style='text-align:center'>péng yǒu</div><div class='hint'>👆 选出和拼音对应的词语</div>", "opts": ["朋友", "大人", "雨水"], "ans": 0, "speakAns": "朋友" },
+    { "type": "choice", "tag": "看拼音写词", "kp": "拼音", "teach": "kuài 快 lè 乐，是'快乐'。", "say": "看拼音，选词语：kuài lè。", "html": "<div class='py' style='text-align:center'>kuài lè</div><div class='hint'>👆 选出和拼音对应的词语</div>", "opts": ["雨水", "快乐", "木头"], "ans": 1, "speakAns": "快乐" },
+    { "type": "choice", "tag": "看拼音写词", "kp": "拼音", "teach": "xiě 写 zì 字，是'写字'。", "say": "看拼音，选词语：xiě zì。", "html": "<div class='py' style='text-align:center'>xiě zì</div><div class='hint'>👆 选出和拼音对应的词语</div>", "opts": ["白云", "写字", "大山"], "ans": 1, "speakAns": "写字" },
+    { "type": "choice", "tag": "看拼音写词", "kp": "拼音", "teach": "gāo 高 xìng 兴，是'高兴'。", "say": "看拼音，选词语：gāo xìng。", "html": "<div class='py' style='text-align:center'>gāo xìng</div><div class='hint'>👆 选出和拼音对应的词语</div>", "opts": ["高兴", "上下", "水田"], "ans": 0, "speakAns": "高兴" },
+    { "type": "choice", "tag": "反义词", "kp": "反义词", "teach": "大的反义是'小'。", "say": "写出反义词：大 对什么？", "html": "<div class='bigword' style='font-size:34px'>大 ——（ ？ ）</div>", "opts": ["小", "多", "上"], "ans": 0, "speakAns": "小" },
+    { "type": "choice", "tag": "反义词", "kp": "反义词", "teach": "多的反义是'少'。", "say": "写出反义词：多 对什么？", "html": "<div class='bigword' style='font-size:34px'>多 ——（ ？ ）</div>", "opts": ["来", "少", "出"], "ans": 1, "speakAns": "少" },
+    { "type": "choice", "tag": "反义词", "kp": "反义词", "teach": "出的反义是'入'（也可以写'进'）。", "say": "写出反义词：出 对什么？", "html": "<div class='bigword' style='font-size:34px'>出 ——（ ？ ）</div>", "opts": ["入", "右", "天"], "ans": 0, "speakAns": "入" },
+    { "type": "choice", "tag": "反义词", "kp": "反义词", "teach": "男的反义是'女'。", "say": "写出反义词：男 对什么？", "html": "<div class='bigword' style='font-size:34px'>男 ——（ ？ ）</div>", "opts": ["女", "老", "去"], "ans": 0, "speakAns": "女" },
+    { "type": "choice", "tag": "量词", "kp": "量词", "teach": "小鸟用'只'：一只小鸟。", "say": "括号里填什么量词：一（ ）小鸟？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）小鸟</div>", "opts": ["只", "条", "本"], "ans": 0, "speakAns": "只" },
+    { "type": "choice", "tag": "量词", "kp": "量词", "teach": "鱼用'条'：一条鱼。", "say": "括号里填什么量词：一（ ）鱼？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）鱼</div>", "opts": ["本", "条", "朵"], "ans": 1, "speakAns": "条" },
+    { "type": "choice", "tag": "量词", "kp": "量词", "teach": "书用'本'：一本书。", "say": "括号里填什么量词：一（ ）书？", "html": "<div class='bigword' style='font-size:30px'>一（ ？ ）书</div>", "opts": ["本", "头", "片"], "ans": 0, "speakAns": "本" },
+    { "type": "choice", "tag": "多音字", "kp": "多音字", "teach": "'长大'的'长'读 zhǎng（生长的长）。", "say": "长（　）大，这里的长读什么？", "html": "<div class='bigword' style='font-size:30px'>长（ ？ ）大</div>", "opts": ["zhǎng", "cháng"], "ans": 0, "speakAns": "zhǎng" },
+    { "type": "choice", "tag": "课文积累", "kp": "课文积累", "teach": "课文：春回大地。", "say": "按课文填空：春回（ ？ ）地。", "html": "<div style='font-size:24px;text-align:center'>春回（ ？ ）地</div>", "opts": ["大", "小", "上"], "ans": 0, "speakAns": "大" },
+    { "type": "choice", "tag": "课文积累", "kp": "课文积累", "teach": "课文：弯弯的月儿小小的船。", "say": "按课文填空：弯弯的月儿（ ？ ）的船。", "html": "<div style='font-size:24px;text-align:center'>弯弯的月儿（ ？ ）的船</div>", "opts": ["小小", "大大", "圆圆"], "ans": 0, "speakAns": "小小" },
+    { "type": "choice", "tag": "汉字笔顺", "kp": "汉字笔顺", "teach": "'木'加一横变成'本'（也可以变成'禾'）。", "say": "木 加一笔变成什么字？", "html": "<div class='bigword' style='font-size:40px'>木 ＋ 一 ＝ ？</div>", "opts": ["本", "天", "大"], "ans": 0, "speakAns": "本" },
+    { "type": "choice", "tag": "数笔画", "kp": "汉字笔画", "teach": "'五'字共 4 画：横、竖、横折、横。", "say": "“五”字共有几画？", "html": "<div class='bigword'>五</div>", "opts": ["4", "5", "3"], "ans": 0, "speakAns": "五字共4画" },
+    { "type": "match", "tag": "反义词连线", "kp": "反义词", "teach": "把意思相反的词连起来：大—小、多—少、上—下、男—女。", "say": "把意思相反的词连起来。", "pairs": [["大","小"],["多","少"],["上","下"],["男","女"]], "left": ["大","多","上","男"], "right": ["小","下","女","少"] },
+    { "type": "speak", "tag": "看图说话", "kp": "表达", "teach": "说清楚'谁、在哪里、做什么'就很棒。", "say": "看图说话：小白兔白又白，两只耳朵竖起来，爱吃萝卜和青菜。请你说一说小白兔长什么样、爱吃什么？", "html": "<div style='font-size:52px;text-align:center;letter-spacing:10px;margin:14px 0'>🐰 🥕 🌿</div><div class='hint'>👆 大声说一说，说完点「说好啦」</div>" }
+  ]
+}

@@ -1,0 +1,163 @@
+/*
+ * abacus.css — 组件层 / 口算动画课堂
+ * 算式台、动画 emoji 节点、图形选择、控制面板、步骤与语音显示。
+ */
+.ab-stage {
+  position: relative;
+  text-align: center;
+  background: #fffdf7;
+  border: 2px dashed #ffd9a8;
+  border-radius: 16px;
+  padding: 14px 10px 18px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+#topLabel {
+  min-height: 30px;
+  font-size: 22px;
+  color: #e65100;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+#row {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  min-height: 56px;
+  font-size: 46px;
+  line-height: 1.2;
+}
+.e {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 2px 3px;
+  -webkit-animation: popIn .35s ease both;
+  animation: popIn .35s ease both;
+}
+.e.fromR { -webkit-animation: popInR .35s ease both; animation: popInR .35s ease both; }
+.e.off { -webkit-transition: -webkit-transform .35s, opacity .35s; transition: transform .35s, opacity .35s; -webkit-transform: scale(0) rotate(40deg); transform: scale(0) rotate(40deg); opacity: 0; }
+.e.gold { -webkit-filter: drop-shadow(0 0 6px #ffd54f); filter: drop-shadow(0 0 6px #ffd54f); }
+.e.blue { -webkit-filter: drop-shadow(0 0 6px #4fc3f7); filter: drop-shadow(0 0 6px #4fc3f7); }
+.e.count { -webkit-transform: scale(1.18); transform: scale(1.18); -webkit-filter: drop-shadow(0 0 8px #ffeb3b); filter: drop-shadow(0 0 8px #ffeb3b); }
+.ab-stage .e { width: 1em; height: 1em; }
+.ab-stage .e svg { width: 100%; height: 100%; display: block; }
+.espace { display: inline-block; width: 14px; }
+@-webkit-keyframes popInR { 0% { -webkit-transform: translateX(20px) scale(0); transform: translateX(20px) scale(0); } 80% { -webkit-transform: scale(1.15); transform: scale(1.15); } 100% { -webkit-transform: scale(1); transform: scale(1); } }
+@keyframes popInR { 0% { -webkit-transform: translateX(20px) scale(0); transform: translateX(20px) scale(0); } 80% { -webkit-transform: scale(1.15); transform: scale(1.15); } 100% { -webkit-transform: scale(1); transform: scale(1); } }
+
+/* 大括号路径（画在 row 下方） */
+#bracePath { stroke: #ffb74d; stroke-width: 4; fill: none; }
+
+/* 题目标签 “？个” */
+.q { font-size: 22px; color: #e65100; font-weight: bold; }
+.q.pulse { -webkit-animation: pulse 1s ease-in-out infinite; animation: pulse 1s ease-in-out infinite; }
+.q.big { font-size: 28px; }
+@-webkit-keyframes pulse { 0%,100% { -webkit-transform: scale(1); transform: scale(1); } 50% { -webkit-transform: scale(1.15); transform: scale(1.15); } }
+@keyframes pulse { 0%,100% { -webkit-transform: scale(1); transform: scale(1); } 50% { -webkit-transform: scale(1.15); transform: scale(1.15); } }
+
+/* 算式条 */
+.eqbar {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  font-size: 30px;
+  color: #4a3b2a;
+  margin: 6px 0;
+}
+.eqbar .e-a, .eqbar .e-b, .eqbar .e-op { margin: 0 8px; font-weight: bold; color: #e65100; }
+.eqbar .e-ans {
+  display: inline-block;
+  min-width: 46px;
+  margin-left: 8px;
+  padding: 2px 10px;
+  color: #fff;
+  background: #66bb6a;
+  border-radius: 12px;
+  -webkit-transform: scale(0);
+  transform: scale(0);
+}
+.eqbar .e-ans.reveal { -webkit-animation: popIn .4s ease both; animation: popIn .4s ease both; }
+
+/* 控制面板 */
+.ab-controls { margin-top: 6px; }
+.ab-group { margin: 10px 0; text-align: center; }
+.ab-group .lab { display: block; font-size: 14px; color: #8d7a63; margin-bottom: 6px; }
+.modebar { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; -webkit-box-pack: center; -webkit-justify-content: center; justify-content: center; }
+.modebar .mbtn {
+  margin: 4px;
+  padding: 8px 14px;
+  font-size: 15px;
+  color: #6b5640;
+  background: #fff;
+  border: 2px solid #ffe0b2;
+  border-radius: 16px;
+}
+.modebar .mbtn.on { background: #ff7043; color: #fff; border-color: #e65100; }
+.numctrl { display: -webkit-inline-box; display: -webkit-inline-flex; display: inline-flex; -webkit-box-align: center; -webkit-align-items: center; align-items: center; margin: 0 8px; }
+.numctrl button {
+  width: 40px; height: 40px;
+  font-size: 22px; font-weight: bold;
+  color: #fff; background: #ffa270;
+  border-radius: 12px;
+}
+.numctrl .val { min-width: 40px; text-align: center; font-size: 22px; font-weight: bold; color: #e65100; }
+
+/* 图形选择 */
+.emo-row { text-align: center; margin: 8px 0; line-height: 2; }
+.emo { display: inline-block; font-size: 30px; margin: 0 2px; cursor: pointer; width: 1em; height: 1em; }
+.emo svg { width: 100%; height: 100%; display: block; }
+
+/* 步骤与语音 */
+#steps {
+  min-height: 24px;
+  text-align: center;
+  font-size: 15px;
+  color: #c66900;
+  background: #fff8e1;
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+#say {
+  text-align: center;
+  font-size: 14px;
+  color: #8d7a63;
+  min-height: 20px;
+}
+.playbar { text-align: center; margin: 8px 0; }
+.playbar .btn { margin: 4px; }
+
+/* 速度选择 */
+.speedsel { margin-left: 8px; padding: 4px 6px; font-size: 14px; border: 2px solid #ffd9a8; border-radius: 10px; }
+
+/* 画图小工具（开源库：SVG.js / Rough.js / anime.js） */
+.gd-panel { margin-top: 14px; }
+.gd-head { font-size: 17px; font-weight: bold; color: #e65100; margin-bottom: 10px; }
+.gd-head .gd-sub { font-size: 12px; font-weight: normal; color: #9b8a72; margin-left: 8px; }
+.gd-tools { display: -webkit-box; display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; }
+.gd-btn {
+  margin: 0 8px 8px 0; padding: 8px 14px; font-size: 14px; cursor: pointer;
+  background: #fffdf7; border: 2px solid #ffd9a8; border-radius: 999px; color: #8d5524;
+  -webkit-transition: background .15s, color .15s; transition: background .15s, color .15s;
+}
+.gd-btn.on { background: #ff7043; border-color: #ff7043; color: #fff; }
+.gd-stage {
+  height: 220px; background: #fffdf7;
+  border: 2px dashed #ffcc80; border-radius: 14px;
+}
+.gd-tip { margin-top: 8px; font-size: 13px; color: #5d4037; line-height: 1.7; }
+.gd-fallback { padding: 20px; color: #9b8a72; font-size: 13px; }

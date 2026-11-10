@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://newusually.github.io/first-grade-learning-land/sitemap.xml

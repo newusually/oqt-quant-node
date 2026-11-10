@@ -1,0 +1,528 @@
+{
+ "type": "chinese",
+ "name": "语文真题B",
+ "questions": [
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "tiān shàng 对应的词是“天上”。",
+   "say": "看拼音，选词语：tiān shàng。",
+   "html": "<div class='py' style='text-align:center'>tiān shàng</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "天上",
+    "大火",
+    "小鸟",
+    "白云"
+   ],
+   "ans": 0,
+   "speakAns": "天上"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "xiǎo niǎo 对应的词是“小鸟”。",
+   "say": "看拼音，选词语：xiǎo niǎo。",
+   "html": "<div class='py' style='text-align:center'>xiǎo niǎo</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "白云",
+    "小鸟",
+    "天上",
+    "大火"
+   ],
+   "ans": 1,
+   "speakAns": "小鸟"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "bái yún 对应的词是“白云”。",
+   "say": "看拼音，选词语：bái yún。",
+   "html": "<div class='py' style='text-align:center'>bái yún</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "天上",
+    "白云",
+    "大火"
+   ],
+   "ans": 2,
+   "speakAns": "白云"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "dà huǒ 对应的词是“大火”。",
+   "say": "看拼音，选词语：dà huǒ。",
+   "html": "<div class='py' style='text-align:center'>dà huǒ</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "大火",
+    "天上",
+    "白云"
+   ],
+   "ans": 1,
+   "speakAns": "大火"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "rì yuè 对应的词是“日月”。",
+   "say": "看拼音，选词语：rì yuè。",
+   "html": "<div class='py' style='text-align:center'>rì yuè</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "白云",
+    "日月",
+    "天上"
+   ],
+   "ans": 2,
+   "speakAns": "日月"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "shuǐ niú 对应的词是“水牛”。",
+   "say": "看拼音，选词语：shuǐ niú。",
+   "html": "<div class='py' style='text-align:center'>shuǐ niú</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "白云",
+    "天上",
+    "水牛"
+   ],
+   "ans": 3,
+   "speakAns": "水牛"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "mù mǎ 对应的词是“木马”。",
+   "say": "看拼音，选词语：mù mǎ。",
+   "html": "<div class='py' style='text-align:center'>mù mǎ</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "木马",
+    "小鸟",
+    "天上",
+    "白云"
+   ],
+   "ans": 0,
+   "speakAns": "木马"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "ér zi 对应的词是“儿子”。",
+   "say": "看拼音，选词语：ér zi。",
+   "html": "<div class='py' style='text-align:center'>ér zi</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "儿子",
+    "小鸟",
+    "天上",
+    "白云"
+   ],
+   "ans": 0,
+   "speakAns": "儿子"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "shàng xià 对应的词是“上下”。",
+   "say": "看拼音，选词语：shàng xià。",
+   "html": "<div class='py' style='text-align:center'>shàng xià</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "天上",
+    "上下",
+    "小鸟",
+    "白云"
+   ],
+   "ans": 1,
+   "speakAns": "上下"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "péng yǒu 对应的词是“朋友”。",
+   "say": "看拼音，选词语：péng yǒu。",
+   "html": "<div class='py' style='text-align:center'>péng yǒu</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "白云",
+    "朋友",
+    "天上"
+   ],
+   "ans": 2,
+   "speakAns": "朋友"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "kuài lè 对应的词是“快乐”。",
+   "say": "看拼音，选词语：kuài lè。",
+   "html": "<div class='py' style='text-align:center'>kuài lè</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "天上",
+    "白云",
+    "快乐",
+    "小鸟"
+   ],
+   "ans": 2,
+   "speakAns": "快乐"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "gāo xìng 对应的词是“高兴”。",
+   "say": "看拼音，选词语：gāo xìng。",
+   "html": "<div class='py' style='text-align:center'>gāo xìng</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "白云",
+    "天上",
+    "小鸟",
+    "高兴"
+   ],
+   "ans": 3,
+   "speakAns": "高兴"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "xiě zì 对应的词是“写字”。",
+   "say": "看拼音，选词语：xiě zì。",
+   "html": "<div class='py' style='text-align:center'>xiě zì</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "白云",
+    "写字",
+    "天上"
+   ],
+   "ans": 2,
+   "speakAns": "写字"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "xià yǔ 对应的词是“下雨”。",
+   "say": "看拼音，选词语：xià yǔ。",
+   "html": "<div class='py' style='text-align:center'>xià yǔ</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "白云",
+    "小鸟",
+    "下雨",
+    "天上"
+   ],
+   "ans": 2,
+   "speakAns": "下雨"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "huā duǒ 对应的词是“花朵”。",
+   "say": "看拼音，选词语：huā duǒ。",
+   "html": "<div class='py' style='text-align:center'>huā duǒ</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "花朵",
+    "白云",
+    "天上",
+    "小鸟"
+   ],
+   "ans": 0,
+   "speakAns": "花朵"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "shù yè 对应的词是“树叶”。",
+   "say": "看拼音，选词语：shù yè。",
+   "html": "<div class='py' style='text-align:center'>shù yè</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "树叶",
+    "白云",
+    "小鸟",
+    "天上"
+   ],
+   "ans": 0,
+   "speakAns": "树叶"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "dà mén 对应的词是“大门”。",
+   "say": "看拼音，选词语：dà mén。",
+   "html": "<div class='py' style='text-align:center'>dà mén</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "白云",
+    "小鸟",
+    "天上",
+    "大门"
+   ],
+   "ans": 3,
+   "speakAns": "大门"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "míng yuè 对应的词是“明月”。",
+   "say": "看拼音，选词语：míng yuè。",
+   "html": "<div class='py' style='text-align:center'>míng yuè</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "天上",
+    "白云",
+    "明月"
+   ],
+   "ans": 3,
+   "speakAns": "明月"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "shān shàng 对应的词是“山上”。",
+   "say": "看拼音，选词语：shān shàng。",
+   "html": "<div class='py' style='text-align:center'>shān shàng</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "山上",
+    "白云",
+    "天上"
+   ],
+   "ans": 1,
+   "speakAns": "山上"
+  },
+  {
+   "type": "choice",
+   "tag": "看拼音写词",
+   "kp": "拼音",
+   "teach": "xiǎo hé 对应的词是“小河”。",
+   "say": "看拼音，选词语：xiǎo hé。",
+   "html": "<div class='py' style='text-align:center'>xiǎo hé</div><div class='hint'>👆 选出和拼音对应的词语</div>",
+   "opts": [
+    "小鸟",
+    "天上",
+    "白云",
+    "小河"
+   ],
+   "ans": 3,
+   "speakAns": "小河"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：一去二三里，烟村四五家。",
+   "say": "按课文填空：一去二三里，烟村（　）（　）家。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>一去二三里，烟村（　）（　）家。</div>",
+   "opts": [
+    "四五",
+    "六七",
+    "二三"
+   ],
+   "ans": 0,
+   "speakAns": "四五"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：弯弯的月儿小小的船。",
+   "say": "按课文填空：弯弯的月儿（　　）的船。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>弯弯的月儿（　　）的船。</div>",
+   "opts": [
+    "小小",
+    "大大",
+    "圆圆"
+   ],
+   "ans": 0,
+   "speakAns": "小小"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：春去花还在，人来鸟不惊。",
+   "say": "按课文填空：春去（　）还在，人来鸟不惊。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>春去（　）还在，人来鸟不惊。</div>",
+   "opts": [
+    "花",
+    "草",
+    "山"
+   ],
+   "ans": 0,
+   "speakAns": "花"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：床前明月光，疑是地上霜。",
+   "say": "按课文填空：床前明月（　），疑是地上霜。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>床前明月（　），疑是地上霜。</div>",
+   "opts": [
+    "光",
+    "亮",
+    "白"
+   ],
+   "ans": 0,
+   "speakAns": "光"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：谁知盘中餐，粒粒皆辛苦。",
+   "say": "按课文填空：谁知盘（　）餐，粒粒皆辛苦。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>谁知盘（　）餐，粒粒皆辛苦。</div>",
+   "opts": [
+    "中",
+    "上",
+    "下"
+   ],
+   "ans": 0,
+   "speakAns": "中"
+  },
+  {
+   "type": "choice",
+   "tag": "课文填空",
+   "kp": "课文积累",
+   "teach": "课文：白毛浮绿水，红掌拨清波。",
+   "say": "按课文填空：（　）毛浮绿水，红掌拨清波。",
+   "html": "<div style='font-size:24px;text-align:center;line-height:2'>（　）毛浮绿水，红掌拨清波。</div>",
+   "opts": [
+    "白",
+    "黑",
+    "红"
+   ],
+   "ans": 0,
+   "speakAns": "白"
+  },
+  {
+   "type": "match",
+   "tag": "反义词连线",
+   "kp": "反义词",
+   "teach": "反义词意思相反，如：大—小、多—少、上—下。",
+   "say": "把意思相反的词连起来。",
+   "pairs": [
+    [
+     "大",
+     "小"
+    ],
+    [
+     "多",
+     "少"
+    ],
+    [
+     "上",
+     "下"
+    ],
+    [
+     "来",
+     "去"
+    ],
+    [
+     "男",
+     "女"
+    ],
+    [
+     "远",
+     "近"
+    ],
+    [
+     "黑",
+     "白"
+    ],
+    [
+     "前",
+     "后"
+    ]
+   ],
+   "left": [
+    "大",
+    "多",
+    "上",
+    "来",
+    "男",
+    "远",
+    "黑",
+    "前"
+   ],
+   "right": [
+    "近",
+    "女",
+    "少",
+    "白",
+    "后",
+    "去",
+    "下",
+    "小"
+   ],
+   "speakAns": null
+  },
+  {
+   "type": "match",
+   "tag": "反义词连线",
+   "kp": "反义词",
+   "teach": "反义词意思相反，如：大—小、多—少、上—下。",
+   "say": "把意思相反的词连起来。",
+   "pairs": [
+    [
+     "开",
+     "关"
+    ],
+    [
+     "高",
+     "矮"
+    ],
+    [
+     "出",
+     "入"
+    ],
+    [
+     "老",
+     "少"
+    ],
+    [
+     "冷",
+     "热"
+    ],
+    [
+     "哭",
+     "笑"
+    ]
+   ],
+   "left": [
+    "开",
+    "高",
+    "出",
+    "老",
+    "冷",
+    "哭"
+   ],
+   "right": [
+    "矮",
+    "热",
+    "关",
+    "入",
+    "笑",
+    "少"
+   ],
+   "speakAns": null
+  }
+ ]
+}
