@@ -181,6 +181,24 @@ if (snap) {
   if (snap.backtest) out.backtest = snap.backtest;
 }
 
+/* ① 亏损归因兜底：模型未返回时，用快照数据生成诚实说明，保证报表不空白（强制亏损归因） */
+if (!out.lossAnalysis || !out.lossAnalysis.length) {
+  const snapTrades = (snap && Array.isArray(snap.trades)) ? snap.trades : [];
+  const closedLoss = snapTrades.filter(function (t) { return t.netUsd != null && +t.netUsd < 0; });
+  if (closedLoss.length) {
+    out.lossAnalysis = closedLoss.slice(0, 300).map(function (t) {
+      const n = +t.netUsd;
+      return { pid: str(t.pid).slice(0, 48), inst: str(t.inst).slice(0, 32),
+        why: '（自动归因）' + str(t.inst) + ' ' + str(t.dir) + ' 持仓，净USD ' + (n >= 0 ? '+' : '') + n.toFixed(4) + '，出场价 ' + str(t.exitPx) + '。模型未提供原因。' };
+    });
+  } else {
+    const bt = (snap && snap.backtest) || {};
+    const closed = bt.closed || 0, wins = bt.wins || 0;
+    const openCnt = snapTrades.filter(function (t) { return t.outcome === '持仓中'; }).length;
+    out.lossAnalysis = [{ pid: '', inst: '', why: '回测区间已平 ' + closed + ' 笔（盈利 ' + wins + ' / 亏损 0），暂无已平亏损可供归因；当前 ' + openCnt + ' 笔持仓中，浮亏原因见未平仓位监控。' }];
+  }
+}
+
 const tmp = OUT + '.tmp';
 fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
 fs.renameSync(tmp, OUT);

@@ -1,7 +1,7 @@
   /* ===================== AI 策略面板（每天零点自动分析回写） ===================== */
   var aiTimer = null, lastAiSig = '';
   var AI_TAGS = { danger: '🔴 高风险', warn: '🟠 需关注', ok: '🟢 正常', info: '🔵 建议' };
-  var aiTradesPage = 1, aiTradesPer = 30;
+  var aiTradesPage = 1, aiTradesPer = 10;
 
   function fmt(s) {
     return esc(String(s == null ? '' : s))
@@ -93,7 +93,7 @@
     var table = '<div class="ai-trades"><table><thead><tr>' +
       '<th>轮次</th><th>合约</th><th>方向</th><th>入场价</th><th>加仓</th><th>出场价</th><th>净USD</th><th>归类</th><th>持仓</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
-    var perOpts = [20, 30, 50, 100].map(function (p) {
+    var perOpts = [10, 20, 30, 50, 100].map(function (p) {
       return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
     }).join('');
     var pager = '<div class="pager">' +
@@ -154,6 +154,58 @@
       return '<div class="ai-code">' + title + desc + code + '</div>';
     }).join('');
   }
+  /* 亏损归因：模型未返回时用快照数据生成诚实说明，保证报表不空白（强制亏损归因） */
+  function renderLossAnalysis(r) {
+    var la = r.lossAnalysis;
+    if (la && la.length) return renderAnaList(la);
+    var bt = r.backtest || {};
+    var closed = (bt.closed || 0), wins = (bt.wins || 0), losses = (bt.losses || 0);
+    var open = (r.trades || []).filter(function (t) { return t.outcome === '持仓中'; }).length;
+    var msg;
+    if (!losses) {
+      msg = '回测区间已平 **' + closed + ' 笔**（盈利 ' + wins + ' / 亏损 0），**暂无已平亏损可供归因**。当前 ' + open + ' 笔持仓中，浮亏原因见「未平仓位监控」。';
+    } else {
+      msg = '模型未返回亏损归因，但回测显示已平亏损 **' + losses + ' 笔**——请查看「全部交易明细」中归类为「亏损」的行逐笔核对（净USD<0）。';
+    }
+    return '<div class="ai-empty">' + fmt(msg) + '</div>';
+  }
+  /* 未平仓位监控：由全部交易实时聚合（285 笔持仓），附监控阈值建议 */
+  function renderOpenMonitor(trades) {
+    var open = (trades || []).filter(function (t) { return t.outcome === '持仓中'; });
+    if (!open.length) return '<div class="ai-empty">暂无未平仓位</div>';
+    var d = { '多': 0, '空': 0 }, adds = {}, inst = {};
+    open.forEach(function (t) {
+      var dir = (t.dir === '空') ? '空' : '多';
+      d[dir]++;
+      var a = t.adds || 0; adds[a] = (adds[a] || 0) + 1;
+      inst[t.inst] = (inst[t.inst] || 0) + 1;
+    });
+    var added = open.filter(function (t) { return (t.adds || 0) > 0; }).length;
+    var noAdd = open.length - added;
+    var avg = open.reduce(function (s, t) { return s + (t.adds || 0); }, 0) / open.length;
+    var top = Object.keys(inst).map(function (k) { return { inst: k, n: inst[k] }; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 8)
+      .map(function (x) { return '<tr><td class="inst">' + esc(x.inst) + '</td><td>' + num(x.n, 0) + '</td></tr>'; }).join('');
+    var stats = [
+      ['未平仓位总数', num(open.length, 0)],
+      ['多 / 空', num(d['多'], 0) + ' / ' + num(d['空'], 0)],
+      ['已加仓 / 未加仓', num(added, 0) + ' / ' + num(noAdd, 0)],
+      ['平均加仓次数', num(avg, 2)]
+    ];
+    return '<div class="ai-sub">📡 未平仓位监控（实时聚合自交易明细）</div>' +
+      '<table class="ai-metrics"><tbody>' + stats.map(function (x) {
+        return '<tr><td>' + x[0] + '</td><td class="flat">' + x[1] + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<div class="ai-sub">监控阈值建议（基于当前引擎规则）</div>' +
+      '<div class="ai-root">' +
+      '· <b>止盈线</b>：浮盈 ≥ <b>+5%</b> 自动止盈<br>' +
+      '· <b>加仓触发</b>：浮亏 > <b>0%</b> 且出现买卖信号(零轴翻转)同向 + 满 1h 间隔<br>' +
+      '· <b>浮亏预警</b>：单仓浮亏 ≥ <b>-2%</b> 进入加仓关注区，留意同向信号<br>' +
+      '· <b>持仓超时</b>：> 24h 未平且未加仓，关注方向与信号<br>' +
+      '· 单笔实时浮盈/浮亏详见「实时持仓」面板' +
+      '</div>' +
+      (top ? '<div class="ai-sub">持仓最集中合约（Top 8）</div><table class="ai-metrics"><thead><tr><th>合约</th><th>持仓数</th></tr></thead><tbody>' + top + '</tbody></table>' : '');
+  }
 
   function renderAI(d) {
     var el = document.getElementById('ft-ai'); if (!el) return;
@@ -201,13 +253,14 @@
       '<div class="ai-col"><h5>📋 全部交易明细（报表 · 全量）</h5>' +
       renderInstSummary(r.trades) +
       '<div id="ft-ai-trades" class="ai-trades-wrap"></div>' +
+      renderOpenMonitor(r.trades) +
       '<h5 class="ai-gap">🧪 回测全量汇总</h5>' +
       renderBacktestBox(r.backtest) +
       (r.backtestText && r.backtestText.summary ? '<div class="ai-sub">AI 回测结论</div><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
       '</div>' +
       /* 右：亏损归因 + 根因 + 代码修改 + 结论 + 窗口 */
       '<div class="ai-col"><h5>❌ 亏损归因（全部亏损笔 · 为什么亏）</h5>' +
-      renderAnaList(r.lossAnalysis, '暂无亏损归因') +
+      renderLossAnalysis(r) +
       (r.rootCause ? '<h5 class="ai-gap">🧭 强制根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
       '<h5 class="ai-gap">🛠 策略 / 代码修改</h5>' +
       renderCodeBox(r.codeChanges) +
