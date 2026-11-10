@@ -68,7 +68,7 @@ function restoreOpen() {
 /* ============================== 金字塔主循环（第五版） ==============================
  * 每个合约·方向只允许一个金字塔（pyrActive 防重），只 15m。
  * ① 入场：MACD(12,26,60) 零轴翻转；同根 K 线槽已占用则不开仓；每笔 0.1 美金。
- * ② 加仓：满 1 小时 + 浮亏 > 0（只要亏损即同向加仓）+ 当前 MACD 柱方向同向 + 同根 K 线槽空闲 → 0.1 美金。
+ * ② 加仓：满 1 小时 + 浮亏 > 0（只要亏损即同向加仓）+ 出现买卖信号(零轴翻转)且与持仓同向 + 同根 K 线槽空闲 → 0.1 美金。
  * ③ 平仓：整仓浮盈 > 总投入 5% 止盈；否则一直持有，不止损、不按时间平仓。
  * ★节奏约束：买多/卖空/加仓只在每根 15m K 线边界后的 ENTRY_WINDOW_MS 窗口内执行（窗口外只平仓），
  *   且平仓后同合约·同周期冷却 REOPEN_COOLDOWN_MS（1 根K线），彻底消除"每时每刻都在买卖"的观感。
@@ -81,7 +81,7 @@ function scan() {
    *   这样所有买卖/加仓都明确发生在每 15 分钟一次，绝不会"每时每刻"触发。 */
   const inWindow = entryWindowUntil > 0 && now <= entryWindowUntil;
 
-  /* ---- 1) 遍历未平仓金字塔：满1小时+浮亏>1%+MACD柱方向同向加仓 / 浮盈>10%止盈平仓（不准按时间平仓）---- */
+  /* ---- 1) 遍历未平仓金字塔：满1小时+浮亏>0%+买卖信号(零轴翻转)同向加仓 / 浮盈>5%止盈平仓（不准按时间平仓）---- */
   for (const [pid, p] of pyramids) {
     if (p.closed) continue;
     const b = books.get(p.instId);
@@ -109,12 +109,12 @@ function scan() {
     }
 
     /* 加仓四条件：距开仓/上次加仓满 1 小时；整仓毛浮亏 > 0（只要亏损即同向加仓，多空对称）；
-     *   当前 15m K 线 MACD 柱方向与持仓同向（不要求零轴翻转）；同根 K 线事件槽空闲。
+     *   出现买卖信号：MACD 零轴翻转方向 == 持仓方向（与入场同一信号源，有信号才加仓）；同根 K 线事件槽空闲。
      *   加仓量固定 0.1 美金。 */
     const loss = -grossUnreal;                     // 整仓毛浮亏（USD）
     const sinceTs = p.adds > 0 ? p.lastAddTs : p.entryTs;
     const sigTf = PYR.TFS.find(t => t.id === p.tf) || PYR.TFS[0];
-    const sigDir = pyrMacdDir(p.instId, sigTf);
+    const sigDir = pyrEntrySignal(p.instId, sigTf);   // ★用入场同款买卖信号（零轴翻转），有信号才加仓
     const sameDir = sigDir !== 0 && sigDir === p.dir;
     if (inWindow && loss > p.totalCost * PYR.ADD_LOSS_PCT / 100 &&
         sameDir &&
