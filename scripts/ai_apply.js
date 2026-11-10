@@ -230,7 +230,12 @@ if (!out.floatingLossAnalysis || !out.floatingLossAnalysis.length) {
           (fp == null ? '' : ' / ' + fp.toFixed(2) + '%') + '，成本 ' + str(t.totalCost) + ' USD，加仓 ' + (t.adds || 0) + ' 次。模型未提供原因。' };
     });
   } else {
-    out.floatingLossAnalysis = [{ pid: '', inst: '', dir: '', floatPct: null, why: '当前无持仓中仓位，无浮亏可归因。' }];
+    const snapTrades = (snap && Array.isArray(snap.trades)) ? snap.trades : [];
+    const openCnt = snapTrades.filter(function (t) { return t.outcome === '持仓中'; }).length;
+    out.floatingLossAnalysis = [{ pid: '', inst: '', dir: '', floatPct: null,
+      why: openCnt
+        ? ('当前 ' + openCnt + ' 笔持仓中；本轮快照未含逐笔实时浮亏数据（旧版快照），下一轮起逐笔归因。')
+        : '当前无持仓中仓位，无浮亏可归因。' }];
   }
 }
 

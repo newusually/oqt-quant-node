@@ -215,6 +215,38 @@
       return '<div class="ai-code">' + title + desc + code + '</div>';
     }).join('');
   }
+  /* 结论 / 改进 / 建议：漂亮表格（序号 + 内容） */
+  function renderConclTable(concl) {
+    var rows = concl.map(function (c, i) {
+      var t = typeof c === 'string' ? c : (c.text || c.title || '');
+      return '<tr><td class="cn">' + (i + 1) + '</td><td>' + fmt(t) + '</td></tr>';
+    }).join('');
+    return '<table class="ai-tbl"><thead><tr><th style="width:30px">#</th><th>改进 / 建议</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  /* 修改的代码：漂亮表格（改动内容 + 自动应用状态），含代码片段与执行结果 */
+  function renderCodeTable(list, autoFix) {
+    if (!list || !list.length) return '<div class="ai-empty">暂无代码修改（AI 仅在保守可验证时输出改动）</div>';
+    var resMap = {};
+    ((autoFix && autoFix.results) || []).forEach(function (x, i) { resMap[i] = x; });
+    var rows = list.map(function (c, i) {
+      var st = resMap[i];
+      var stHtml = st
+        ? (st.status === 'applied' ? '<span class="st-ok">✦ 已自动应用</span>'
+          : st.status === 'rolledback' ? '<span class="st-bad">✗ 已回滚</span>'
+          : '<span class="st-skip">⊘ 跳过</span>')
+        : (c.newCode ? '<span class="st-skip">待应用</span>' : '<span class="st-note">仅说明</span>');
+      var code = (c.newCode || c.code) ? '<pre class="ai-codeblock">' + esc(c.newCode || c.code) + '</pre>' : '';
+      return '<tr><td class="ct"><b>' + esc(c.title || ('改动 ' + (i + 1))) + '</b>' +
+        (c.file ? '<div class="cf">' + esc(c.file) + '</div>' : '') +
+        (c.desc ? '<div class="cd">' + fmt(c.desc) + '</div>' : '') + code + '</td>' +
+        '<td class="cs">' + stHtml + (st && st.msg ? '<div class="cm">' + esc(st.msg) + '</div>' : '') + '</td></tr>';
+    }).join('');
+    var head = (autoFix && autoFix.applied)
+      ? '自动改码：<span class="hl-warn">已应用 ' + autoFix.applied + ' 处</span>' + (autoFix.needsRestart ? ' · 待引擎重启生效' : '')
+      : '';
+    return (head ? '<div class="ai-sub">' + head + '</div>' : '') +
+      '<table class="ai-tbl"><thead><tr><th>改动内容（文件 · 说明 · 代码）</th><th style="width:110px">状态</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
   /* 亏损归因：模型未返回时用快照数据生成诚实说明，保证报表不空白（强制亏损归因） */
   function renderLossAnalysis(r) {
     var la = r.lossAnalysis;
@@ -229,6 +261,31 @@
       msg = '模型未返回亏损归因，但回测显示已平亏损 **' + losses + ' 笔**——请查看「全部交易明细」中归类为「亏损」的行逐笔核对（净USD<0）。';
     }
     return '<div class="ai-empty">' + fmt(msg) + '</div>';
+  }
+  /* 每小时浮亏归因：AI 输出优先，其次快照 openPositions 逐笔（实时浮亏最差前10），保证不空白 */
+  function renderFloatLoss(r) {
+    var fl = r.floatingLossAnalysis;
+    if (fl && fl.length) {
+      return '<ul class="ai-ana">' + fl.map(function (x) {
+        var head = (x.pid ? '【' + esc(x.pid) + '】' : '') + (x.inst ? esc(x.inst) + ' ' : '') +
+          (x.dir ? esc(x.dir) + ' ' : '') +
+          (x.floatPct != null ? '<span class="hl-red">' + num(x.floatPct, 2) + '%</span>' : '');
+        return '<li><span class="ai-ana-h">' + head + '</span>' + fmt(x.why) + '</li>';
+      }).join('') + '</ul>';
+    }
+    var ops = (Array.isArray(r.openPositions) ? r.openPositions : []).slice(0, 10);
+    if (ops.length) {
+      return '<ul class="ai-ana">' + ops.map(function (t) {
+        var fp = (t.floatPct == null) ? null : +t.floatPct;
+        var fu = (t.floatUsd == null) ? null : +t.floatUsd;
+        return '<li><span class="ai-ana-h">【' + esc((t.pid || '').slice(0, 20)) + '】' + esc(t.inst) + ' ' + esc(t.dir) +
+          (fp == null ? '' : ' <span class="hl-red">' + fp.toFixed(2) + '%</span>') +
+          (fu == null ? '' : ' <span class="' + (fu >= 0 ? 'up' : 'dn') + '">' + sgn(fu, 4) + ' USD</span>') +
+          '</span>成本 ' + num(t.totalCost, 2) + ' · 加仓 ' + num(t.adds, 0) + ' 次 · 浮盈止盈线 +5%，浮亏>0 且出现零轴翻转信号同向才加仓</li>';
+      }).join('') + '</ul>' +
+      '<div class="ai-empty">以上为快照逐笔实时浮亏（最差前 10）；AI 文字归因下一轮生成。</div>';
+    }
+    return '<div class="ai-empty">本轮快照未含逐笔实时浮亏数据（旧版快照），下一轮分析起显示每小时浮亏归因。</div>';
   }
   /* 未平仓位监控：由全部交易实时聚合（285 笔持仓），附监控阈值建议 */
   function renderOpenMonitor(trades) {
@@ -362,17 +419,10 @@
           '<h5 class="ai-gap">📉 每小时浮亏归因</h5>' + mAnaList(r.floatingLossAnalysis, '暂无') +
           '<h5 class="ai-gap">✅ 盈利归因</h5>' + renderAnaList(r.profitAnalysis, '暂无') +
           '<h5 class="ai-gap">❌ 亏损归因</h5>' + renderAnaList(r.lossAnalysis, '暂无') +
-          ((r.codeChanges || []).length ? '<h5 class="ai-gap">🛠 代码改动' +
-            (autoFix.applied ? '（<span class="hl-warn">已自动应用 ' + autoFix.applied + ' 处' +
-              (autoFix.needsRestart ? '，待引擎重启生效' : '') + '</span>）' : '') + '</h5>' +
-            renderCodeBox(r.codeChanges) +
-            ((autoFix.results || []).length ? '<div class="ai-sub">自动改码执行结果</div><ul class="ai-ana">' +
-              autoFix.results.map(function (x) {
-                return '<li><span class="ai-ana-h">【' + esc(x.status) + '】</span>' + esc(x.file) + ' — ' + esc(x.msg) + '</li>';
-              }).join('') + '</ul>' : '') : '') +
+          ((r.codeChanges || []).length ? '<h5 class="ai-gap">🛠 修改的代码（表格 · 自动应用状态）</h5>' +
+            renderCodeTable(r.codeChanges, autoFix) : '') +
           (r.backtestText && r.backtestText.summary ? '<h5 class="ai-gap">🧪 回测结论</h5><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
-          ((r.conclusions || []).length ? '<h5 class="ai-gap">✅ 结论与建议</h5><ul class="ai-concl">' +
-            r.conclusions.map(function (c) { return '<li>' + fmt(typeof c === 'string' ? c : (c.text || c.title || '')) + '</li>'; }).join('') + '</ul>' : '');
+          ((r.conclusions || []).length ? '<h5 class="ai-gap">✅ 改进与建议（表格）</h5>' + renderConclTable(r.conclusions) : '');
         bd.innerHTML = h;
         bd.scrollTop = 0;
       })
@@ -432,15 +482,15 @@
       renderBacktestBox(r.backtest) +
       (r.backtestText && r.backtestText.summary ? '<div class="ai-sub">AI 回测结论</div><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
       '</div>' +
-      /* 右：亏损归因 + 根因 + 代码修改 + 结论 + 窗口 */
+      /* 右：亏损归因 + 浮亏归因 + 根因 + 代码修改(表格) + 结论建议(表格) + 窗口 */
       '<div class="ai-col"><h5>❌ 亏损归因（全部亏损笔 · 为什么亏）</h5>' +
       renderLossAnalysis(r) +
+      '<h5 class="ai-gap">📉 每小时浮亏归因（持仓中 · 为什么亏）</h5>' +
+      renderFloatLoss(r) +
       (r.rootCause ? '<h5 class="ai-gap">🧭 强制根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
-      '<h5 class="ai-gap">🛠 策略 / 代码修改</h5>' +
-      renderCodeBox(r.codeChanges) +
-      (concl.length ? '<h5 class="ai-gap">✅ 结论与建议</h5><ul class="ai-concl">' +
-        concl.map(function (c) { return '<li>' + fmt(typeof c === 'string' ? c : (c.text || c.title || '')) + '</li>'; }).join('') +
-        '</ul>' : '') +
+      '<h5 class="ai-gap">🛠 修改的代码（表格 · 自动应用状态）</h5>' +
+      renderCodeTable(r.codeChanges, r.autoFix) +
+      (concl.length ? '<h5 class="ai-gap">✅ 改进与建议（表格）</h5>' + renderConclTable(concl) : '') +
       '<h5 class="ai-gap">🕐 分析数据窗口（北京时间）</h5>' +
       (pb ? '<div class="ai-window">' +
         '<div><span>起</span>' + esc(pb.from || '—') + '</div>' +

@@ -166,6 +166,21 @@
       '#' + BOX + ' .ai-modal-x:hover{border-color:#3d7bff;color:#fff}' +
       '#' + BOX + ' .ai-modal-bd{overflow:auto;padding:14px 18px;font-size:12px;color:#c9d6ee;line-height:1.65;flex:1 1 auto}' +
       '#' + BOX + ' .ai-modal-bd h5{margin:12px 0 4px;font-size:12px;color:#cfe0ff}' +
-      '#' + BOX + ' .ai-meta-m{color:#8b9abc;font-size:11.5px;margin-top:6px}';
+      '#' + BOX + ' .ai-meta-m{color:#8b9abc;font-size:11.5px;margin-top:6px}' +
+      /* 结论建议表 / 修改代码表（好看表格格式） */
+      '#' + BOX + ' .ai-tbl{width:100%;font-size:11.3px;border-collapse:collapse;margin:4px 0 8px}' +
+      '#' + BOX + ' .ai-tbl thead th{background:#1b2a45;color:#a9c2ee;text-align:left;padding:5px 7px;border:1px solid #22314e;position:sticky;top:0}' +
+      '#' + BOX + ' .ai-tbl td{border:1px solid #1e2f4c;padding:5px 7px;vertical-align:top;line-height:1.6;color:#cddbf6}' +
+      '#' + BOX + ' .ai-tbl tbody tr:hover td{background:#1a2c4a}' +
+      '#' + BOX + ' .ai-tbl td.cn{width:26px;text-align:center;color:#7fb1ff;font-weight:800}' +
+      '#' + BOX + ' .ai-tbl td.ct b{color:#ffe0a0}' +
+      '#' + BOX + ' .ai-tbl td.cf{font-family:Consolas,Menlo,monospace;font-size:10px;color:#7fb1ff;margin-top:2px;word-break:break-all}' +
+      '#' + BOX + ' .ai-tbl td.cd{color:#a9bcda;margin-top:2px}' +
+      '#' + BOX + ' .ai-tbl td.cs{white-space:nowrap;font-size:10.5px}' +
+      '#' + BOX + ' .ai-tbl td.cm{white-space:normal;color:#8b9abc;font-size:10px;margin-top:2px;max-width:110px}' +
+      '#' + BOX + ' .st-ok{color:#7ce2a8;font-weight:800}' +
+      '#' + BOX + ' .st-bad{color:#ff9a9a;font-weight:800}' +
+      '#' + BOX + ' .st-skip{color:#ffcf8a;font-weight:800}' +
+      '#' + BOX + ' .st-note{color:#8b9abc}';
     document.head.appendChild(st);
   }
