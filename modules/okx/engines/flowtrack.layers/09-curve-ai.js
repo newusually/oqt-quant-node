@@ -55,7 +55,7 @@ function equityCurve() {
 const AI_FILE = path.join(__dirname, '..', '..', '..', 'data', 'ai_strategy.json');
 const AI_PARAM_RULES = {
   tpPct:         { apply: v => { PYR.TP_PCT = v; },          min: 1,         max: 200 },
-  addLossPct:    { apply: v => { PYR.ADD_LOSS_PCT = v; },    min: 1,         max: 200 },
+  addLossPct:    { apply: v => { PYR.ADD_LOSS_PCT = v; },    min: 0,         max: 200 },
   addIntervalMs: { apply: v => { PYR.ADD_INTERVAL_MS = v; }, min: 15 * 60000, max: 7 * 86400000 }
 };
 const AI_LOCKED = ['ENTRY_USD', 'ADD_USD', 'TFS', 'KEEP_FOREVER', 'KEEP_FROM_TS'];
