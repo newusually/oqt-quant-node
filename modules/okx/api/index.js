@@ -107,6 +107,13 @@ async function handle(ep, q, body) {
     case 'ai_strategy': {
       try { return require('../engines/flowtrack').aiStrategy(); } catch (e) { return { ok: false, err: 'AI 策略接口异常: ' + String((e && e.message) || e) }; }
     }
+    /* ★2026-11-11 每小时 AI 总结历史：ai_history 分页列表 / ai_history_detail 单份完整报告 */
+    case 'ai_history': {
+      try { return require('../engines/flowtrack').aiHistory(q.page, q.per); } catch (e) { return { ok: false, err: 'AI 历史接口异常: ' + String((e && e.message) || e) }; }
+    }
+    case 'ai_history_detail': {
+      try { return require('../engines/flowtrack').aiHistoryDetail(q.id); } catch (e) { return { ok: false, err: 'AI 历史详情异常: ' + String((e && e.message) || e) }; }
+    }
     case 'cred':    return await credHandle(q, body);
     default: return { ok: false, err: 'unknown okx ep ' + ep };
   }

@@ -100,13 +100,30 @@ function normSignalReport(arr, max) {
 }
 function normCodeChanges(arr, max) {
   return (Array.isArray(arr) ? arr : []).slice(0, max).map(function (x) {
-    if (typeof x === 'string') return { title: '', code: '', desc: x.slice(0, 400) };
+    if (typeof x === 'string') return { title: '', file: '', oldCode: '', newCode: '', code: x.slice(0, 1200), desc: '' };
     return {
       title: str(x && (x.title || x.name)).slice(0, 80),
+      file: str(x && x.file).slice(0, 200),
+      oldCode: str(x && x.oldCode).slice(0, 4000),
+      newCode: str(x && x.newCode).slice(0, 4000),
       code: str(x && x.code).slice(0, 1200),
       desc: str(x && (x.desc || x.text || x.detail)).slice(0, 400)
     };
-  }).filter(function (x) { return x.desc || x.code; });
+  }).filter(function (x) { return x.desc || x.code || x.newCode; });
+}
+/* 每小时浮亏归因：基于快照 openPositions（当前持仓按实时浮亏排序） */
+function normFloatingLoss(arr, max) {
+  return (Array.isArray(arr) ? arr : []).slice(0, max).map(function (x) {
+    if (typeof x === 'string') return { pid: '', inst: '', dir: '', floatPct: null, why: x.slice(0, 400) };
+    const fp = x && x.floatPct;
+    return {
+      pid: str(x && x.pid).slice(0, 48),
+      inst: str(x && x.inst).slice(0, 32),
+      dir: str(x && x.dir).slice(0, 4),
+      floatPct: (fp === null || fp === undefined || fp === '' || !Number.isFinite(+fp)) ? null : +(+fp).toFixed(4),
+      why: str(x && (x.why || x.text || x.reason)).slice(0, 400)
+    };
+  }).filter(function (x) { return x.why; });
 }
 
 if (!RAW || !OUT) fail('缺少参数');
@@ -164,6 +181,7 @@ const out = {
   profitAnalysis: normTradeAnalysis(rep.profitAnalysis, 300),
   lossAnalysis: normTradeAnalysis(rep.lossAnalysis, 300),
   signalReport: normSignalReport(rep.signalReport, 300),
+  floatingLossAnalysis: normFloatingLoss(rep.floatingLossAnalysis, 20),
   rootCause: str(rep.rootCause).slice(0, 4000),
   backtestText: (rep.backtest && typeof rep.backtest === 'object') ? rep.backtest : null,
   metrics: (Array.isArray(rep.metrics) ? rep.metrics : []).slice(0, 100),
@@ -179,6 +197,7 @@ if (snap) {
   if (Array.isArray(snap.trades)) out.trades = snap.trades;
   if (Array.isArray(snap.signals)) out.signals = snap.signals;
   if (snap.backtest) out.backtest = snap.backtest;
+  if (Array.isArray(snap.openPositions)) out.openPositions = snap.openPositions;
 }
 
 /* ① 亏损归因兜底：模型未返回时，用快照数据生成诚实说明，保证报表不空白（强制亏损归因） */
@@ -199,9 +218,43 @@ if (!out.lossAnalysis || !out.lossAnalysis.length) {
   }
 }
 
+/* ② 每小时浮亏归因兜底：模型未返回时，用快照 openPositions 逐笔生成（最差浮亏前 10） */
+if (!out.floatingLossAnalysis || !out.floatingLossAnalysis.length) {
+  const ops = (snap && Array.isArray(snap.openPositions)) ? snap.openPositions : [];
+  if (ops.length) {
+    out.floatingLossAnalysis = ops.slice(0, 10).map(function (t) {
+      const fp = (t.floatPct == null) ? null : +t.floatPct;
+      return { pid: str(t.pid).slice(0, 48), inst: str(t.inst).slice(0, 32), dir: str(t.dir).slice(0, 4),
+        floatPct: fp,
+        why: '（自动归因）实时浮亏 ' + ((t.floatUsd == null) ? '—' : ((t.floatUsd >= 0 ? '+' : '') + (+t.floatUsd).toFixed(4) + ' USD')) +
+          (fp == null ? '' : ' / ' + fp.toFixed(2) + '%') + '，成本 ' + str(t.totalCost) + ' USD，加仓 ' + (t.adds || 0) + ' 次。模型未提供原因。' };
+    });
+  } else {
+    out.floatingLossAnalysis = [{ pid: '', inst: '', dir: '', floatPct: null, why: '当前无持仓中仓位，无浮亏可归因。' }];
+  }
+}
+
 const tmp = OUT + '.tmp';
 fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
 fs.renameSync(tmp, OUT);
+
+/* ③ 每次分析落盘历史快照（data/ai_history/），供前端「每小时 AI 总结」分页表与详情弹窗；保留最近 200 份 */
+try {
+  const histDir = path.join(path.dirname(OUT), 'ai_history');
+  fs.mkdirSync(histDir, { recursive: true });
+  const d = new Date();
+  const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  const id = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  const hist = Object.assign({}, out, { historyId: id });
+  fs.writeFileSync(path.join(histDir, 'ai_' + id + '.json'), JSON.stringify(hist));
+  const files = fs.readdirSync(histDir).filter(function (f) { return /^ai_\d{8}_\d{6}\.json$/.test(f); }).sort();
+  while (files.length > 200) { try { fs.unlinkSync(path.join(histDir, files.shift())); } catch (e) { break; } }
+  console.log('[ai] 历史已保存 ai_history/ai_' + id + '.json（保留 ' + Math.min(files.length, 200) + ' 份）');
+} catch (e) {
+  console.error('[ai] 历史保存失败(不影响主文件): ' + e.message);
+}
+
 console.log('[ai] 已写入 ' + path.basename(OUT) + ' · 模型=' + out.source +
   ' · 参数=' + JSON.stringify(params) + ' · 拒绝=' + JSON.stringify(rejected) +
-  ' · 重点=' + out.highlights.length + ' · 图=' + Object.keys(charts).join('/'));
+  ' · 重点=' + out.highlights.length + ' · 浮亏归因=' + out.floatingLossAnalysis.length +
+  ' · 图=' + Object.keys(charts).join('/'));

@@ -19,6 +19,7 @@ const out = {
   positions: src.positions,
   trades: trades,
   backtest: src.backtest,
+  openPositions: src.openPositions || [],
   cfg: src.cfg
 };
 fs.writeFileSync(process.argv[3], JSON.stringify(out));

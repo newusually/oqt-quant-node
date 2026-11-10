@@ -68,6 +68,10 @@ for (const pid of Object.keys(byPid)) {
   const totalCost = rs.filter(function (x) { return x.event !== 'close'; }).reduce(function (s, x) { return s + (+x.cost || 0); }, 0);
   const holdMin = (close && entry) ? Math.round((+close.ts - +entry.ts) / 60000) : null;
   const outcome = !close ? '持仓中' : (net > 0 ? '盈利' : '亏损');
+  /* 持仓中：取该 pid 最后一行事件记录的 unreal 作为实时浮盈/浮亏（USD） */
+  const lastRow = rs[rs.length - 1];
+  const floatUsd = !close ? +(+(lastRow.unreal || 0).toFixed(6)) : null;
+  const floatPct = (!close && totalCost > 0) ? +((floatUsd / totalCost) * 100).toFixed(4) : null;
   trades.push({
     pid: String(pid), inst: String(entry.inst_id), dir: dir, tf: entry.tf,
     entryAt: bj(+entry.ts), entryPx: +entryPx.toFixed(6), entryCost: +entryCost.toFixed(6),
@@ -76,6 +80,7 @@ for (const pid of Object.keys(byPid)) {
     totalCost: +totalCost.toFixed(6),
     netUsd: net == null ? null : +net.toFixed(6),
     grossUsd: gross == null ? null : +gross.toFixed(6),
+    floatUsd: floatUsd, floatPct: floatPct,
     holdMin: holdMin, outcome: outcome
   });
 }
@@ -119,6 +124,13 @@ const backtest = {
   totalSignals: allRows.length
 };
 
+/* 每小时浮亏归因数据源：当前持仓按实时浮亏排序（最差在前），供 AI floatingLossAnalysis 使用 */
+const openPositions = trades
+  .filter(function (t) { return t.outcome === '持仓中'; })
+  .slice()
+  .sort(function (a, b) { return (a.floatUsd || 0) - (b.floatUsd || 0); })
+  .slice(0, 50);
+
 const evMap = {};
 for (const e of events) evMap[e.event] = e.n;
 
@@ -137,7 +149,7 @@ console.log(JSON.stringify({
     profitFactor: grossLoss > 0 ? +(grossProfit / grossLoss).toFixed(4) : null
   },
   positions: { open: open.n || 0, costUsd: +(open.cost || 0).toFixed(6) },
-  trades, signals, backtest,
+  trades, signals, backtest, openPositions,
   topAddInstruments: adds, topInstruments: topInst,
   curveTail: curve.slice(-200),
   chartSource: {

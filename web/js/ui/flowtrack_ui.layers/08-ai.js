@@ -1,7 +1,8 @@
   /* ===================== AI 策略面板（每天零点自动分析回写） ===================== */
   var aiTimer = null, lastAiSig = '';
   var AI_TAGS = { danger: '🔴 高风险', warn: '🟠 需关注', ok: '🟢 正常', info: '🔵 建议' };
-  var aiTradesPage = 1, aiTradesPer = 10, aiInstPage = 1, aiInstPer = 20;
+  var aiTradesPage = 1, aiTradesPer = 10, aiInstPage = 1, aiInstPer = 10, aiBtPage = 1, aiBtPer = 10;
+  var aiHistPage = 1, aiHistPer = 10;
 
   function fmt(s) {
     return esc(String(s == null ? '' : s))
@@ -84,7 +85,7 @@
       '<td class="' + (totWr >= 50 ? 'up' : 'dn') + '">' + num(tot.win, 0) + '胜/' + num(tot.loss, 0) + '负 · ' + (totWr == null ? '—' : num(totWr, 1) + '%') + '</td>' +
       '<td class="' + (tot.net >= 0 ? 'up' : 'dn') + '">' + sgn(tot.net, 4) + '</td><td>' + (tot.open ? num(tot.open, 0) + ' 持仓' : '—') + '</td></tr>' +
       '</tbody></table></div>';
-    var perOpts = [20, 50, 100].map(function (p) {
+    var perOpts = [10, 50, 100].map(function (p) {
       return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
     }).join('');
     var pager = '<div class="pager">' +
@@ -163,14 +164,47 @@
       ['有加仓 / 无加仓', num(bt.withAdds, 0) + ' / ' + num(bt.noAdds, 0)],
       ['总信号数', num(bt.totalSignals, 0)]
     ];
-    var bi = (bt.byInstrument || []).map(function (x) {
-      return '<tr><td>' + esc(x.inst) + '</td><td>' + num(x.n, 0) + '</td><td class="' + (x.net >= 0 ? 'up' : 'dn') + '">' + sgn(x.net, 4) + '</td><td>' + num(x.winRate, 1) + '%</td></tr>';
-    }).join('');
     return '<table class="ai-metrics"><tbody>' + rows.map(function (x) {
       var cc = (typeof x[1] === 'string' && /^[-]/.test(x[1])) ? 'dn' : ((typeof x[1] === 'string' && /^[+]/.test(x[1])) ? 'up' : 'flat');
       return '<tr><td>' + x[0] + '</td><td class="' + cc + '">' + x[1] + '</td></tr>';
     }).join('') + '</tbody></table>' +
-    (bi ? '<div class="ai-sub">分合约净USD · 胜率</div><table class="ai-metrics"><thead><tr><th>合约</th><th>笔数</th><th>净USD</th><th>胜率</th></tr></thead><tbody>' + bi + '</tbody></table>' : '');
+    '<div id="ft-ai-btinst" class="ai-btinst-wrap"></div>';
+  }
+  /* 回测分合约净USD · 胜率：分页渲染（10/页），避免与主报表同名表混淆 */
+  function renderBtInstInto(bt) {
+    var wrap = document.getElementById('ft-ai-btinst');
+    if (!wrap) return;
+    var arr = (bt && Array.isArray(bt.byInstrument)) ? bt.byInstrument : [];
+    if (!arr.length) { wrap.innerHTML = ''; return; }
+    var per = aiBtPer, total = arr.length;
+    var pages = Math.max(1, Math.ceil(total / per));
+    if (aiBtPage > pages) aiBtPage = pages;
+    if (aiBtPage < 1) aiBtPage = 1;
+    var rows = arr.slice((aiBtPage - 1) * per, (aiBtPage - 1) * per + per).map(function (x) {
+      return '<tr><td class="inst">' + esc(x.inst) + '</td><td>' + num(x.n, 0) + '</td>' +
+        '<td class="' + (x.net >= 0 ? 'up' : 'dn') + '">' + sgn(x.net, 4) + '</td>' +
+        '<td class="' + (x.winRate >= 50 ? 'up' : 'dn') + '">' + num(x.winRate, 1) + '%</td></tr>';
+    }).join('');
+    var perOpts = [10, 50, 100].map(function (p) {
+      return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
+    }).join('');
+    wrap.innerHTML = '<div class="ai-sub">🧪 回测分合约净USD · 胜率（' + total + ' 合约 · 分页）</div>' +
+      '<div class="ai-trades"><table class="ai-inst-tbl"><thead><tr><th>合约</th><th>笔数</th><th>净USD</th><th>胜率</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="pager">' +
+      '<button class="pg' + (aiBtPage <= 1 ? ' dis' : '') + '" data-pg="' + (aiBtPage - 1) + '"' + (aiBtPage <= 1 ? ' disabled' : '') + '>« 上一页</button>' +
+      '<span class="pg-info">第 ' + aiBtPage + ' / ' + pages + ' 页 · 共 ' + total + ' 合约</span>' +
+      '<button class="pg' + (aiBtPage >= pages ? ' dis' : '') + '" data-pg="' + (aiBtPage + 1) + '"' + (aiBtPage >= pages ? ' disabled' : '') + '>下一页 »</button>' +
+      '<select class="pg-per">' + perOpts + '</select>' +
+      '</div>';
+    wrap.querySelectorAll('button.pg').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = +b.getAttribute('data-pg');
+        if (p >= 1 && p <= pages) { aiBtPage = p; renderBtInstInto(bt); }
+      });
+    });
+    wrap.querySelectorAll('select.pg-per').forEach(function (s) {
+      s.addEventListener('change', function () { aiBtPer = +s.value; aiBtPage = 1; renderBtInstInto(bt); });
+    });
   }
   function renderCodeBox(list) {
     if (!list || !list.length) return '<div class="ai-empty">暂无代码修改</div>';
@@ -232,6 +266,117 @@
       '· 单笔实时浮盈/浮亏详见「实时持仓」面板' +
       '</div>' +
       (top ? '<div class="ai-sub">持仓最集中合约（Top 8）</div><table class="ai-metrics"><thead><tr><th>合约</th><th>持仓数</th></tr></thead><tbody>' + top + '</tbody></table>' : '');
+  }
+
+  /* ===== 每小时 AI 总结（历史）：分页表 + 点击行弹窗看完整详情（样式与 AI 面板一致） ===== */
+  function loadHist() {
+    var wrap = document.getElementById('ft-ai-hist');
+    if (!wrap) return;
+    fetch('/api/okx/ai_history?page=' + aiHistPage + '&per=' + aiHistPer + '&v=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) { wrap.innerHTML = '<div class="ai-empty">历史加载失败</div>'; return; }
+        aiHistPage = d.page; renderHistTable(d);
+      })
+      .catch(function () { wrap.innerHTML = '<div class="ai-empty">历史加载失败</div>'; });
+  }
+  function renderHistTable(d) {
+    var wrap = document.getElementById('ft-ai-hist'); if (!wrap) return;
+    var items = d.items || [];
+    if (!items.length) { wrap.innerHTML = '<div class="ai-empty">暂无历史（每次 AI 分析后自动保存，保留最近 200 份）</div>'; return; }
+    var rows = items.map(function (x) {
+      var net = x.netUsd == null ? null : +x.netUsd;
+      return '<tr class="hist-row" data-id="' + esc(x.id) + '">' +
+        '<td class="mono">' + esc(x.id) + '</td>' +
+        '<td class="hist-verdict" title="' + esc(x.verdict || '') + '">' + esc((x.verdict || '').slice(0, 60)) + '</td>' +
+        '<td class="' + (net == null ? 'flat' : (net >= 0 ? 'up' : 'dn')) + '">' + (net == null ? '—' : sgn(net, 4)) + '</td>' +
+        '<td>' + (x.winRate == null ? '—' : num(x.winRate, 2) + '%') + '</td>' +
+        '<td>' + num(x.closed, 0) + ' / ' + num(x.open, 0) + '</td>' +
+        '<td>' + num(x.floats, 0) + '</td>' +
+        '<td>' + num(x.codes, 0) + (x.autoFixApplied ? ' <span class="hl-warn">✦改' + x.autoFixApplied + '</span>' : '') + '</td>' +
+        '<td class="hist-open">详情 »</td>' +
+      '</tr>';
+    }).join('');
+    var pages = d.pages || 1;
+    var pager = '<div class="pager">' +
+      '<button class="pg' + (aiHistPage <= 1 ? ' dis' : '') + '" data-hpg="' + (aiHistPage - 1) + '"' + (aiHistPage <= 1 ? ' disabled' : '') + '>« 上一页</button>' +
+      '<span class="pg-info">第 ' + aiHistPage + ' / ' + pages + ' 页 · 共 ' + d.total + ' 次</span>' +
+      '<button class="pg' + (aiHistPage >= pages ? ' dis' : '') + '" data-hpg="' + (aiHistPage + 1) + '"' + (aiHistPage >= pages ? ' disabled' : '') + '>下一页 »</button>' +
+      '<select class="pg-per">' + [10, 20, 50].map(function (p) {
+        return '<option value="' + p + '"' + (p === aiHistPer ? ' selected' : '') + '>' + p + '/页</option>';
+      }).join('') + '</select>' +
+      '</div>';
+    wrap.innerHTML = '<div class="ai-trades"><table><thead><tr>' +
+      '<th>时间</th><th>结论</th><th>净USD</th><th>胜率</th><th>平/持</th><th>浮亏归因</th><th>代码改动</th><th>操作</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>' + pager;
+    wrap.querySelectorAll('tr.hist-row').forEach(function (tr) {
+      tr.addEventListener('click', function () { openHistModal(tr.getAttribute('data-id')); });
+    });
+    wrap.querySelectorAll('button[data-hpg]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = +b.getAttribute('data-hpg');
+        if (p >= 1 && p <= pages) { aiHistPage = p; loadHist(); }
+      });
+    });
+    var sel = wrap.querySelector('select.pg-per');
+    if (sel) sel.addEventListener('change', function () { aiHistPer = +sel.value; aiHistPage = 1; loadHist(); });
+  }
+  /* 详情弹窗：遮罩 + 悬浮窗（挂进面板内以复用 ai-* 表格样式），点遮罩/✕ 关闭 */
+  function closeHistModal() {
+    var ov = document.getElementById('ft-ai-modal-ov');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+  function mAnaList(list, empty) {
+    if (!list || !list.length) return '<div class="ai-empty">' + (empty || '暂无') + '</div>';
+    return '<ul class="ai-ana">' + list.map(function (x) {
+      var head = (x.pid ? '【' + esc(x.pid) + '】' : '') + (x.inst ? esc(x.inst) + ' ' : '') +
+        (x.floatPct != null ? '<span class="hl-red">' + num(x.floatPct, 2) + '%</span> ' : '');
+      return '<li><span class="ai-ana-h">' + head + '</span>' + fmt(x.why) + '</li>';
+    }).join('') + '</ul>';
+  }
+  function openHistModal(id) {
+    closeHistModal();
+    var panel = document.getElementById(BOX);
+    if (!panel) return;
+    var ov = document.createElement('div');
+    ov.id = 'ft-ai-modal-ov';
+    ov.innerHTML = '<div class="ai-modal"><div class="ai-modal-hd"><h4>🕐 AI 分析详情 · ' + esc(id) +
+      '（北京时间）</h4><button class="ai-modal-x" type="button">✕</button></div>' +
+      '<div class="ai-modal-bd"><div class="ai-empty">加载中…</div></div></div>';
+    panel.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeHistModal(); });
+    ov.querySelector('.ai-modal-x').addEventListener('click', closeHistModal);
+    var bd = ov.querySelector('.ai-modal-bd');
+    fetch('/api/okx/ai_history_detail?id=' + encodeURIComponent(id) + '&v=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) { bd.innerHTML = '<div class="ai-empty">' + esc((d && d.err) || '加载失败') + '</div>'; return; }
+        var r = d.report || {};
+        var bt = r.backtest || {};
+        var autoFix = r.autoFix || {};
+        var h = '<div class="ai-verdict"><b>结论 · </b>' + fmt(r.verdict || '（无）') + '</div>' +
+          '<div class="ai-meta-m">🕐 ' + esc(r.generatedAtBj || '') + ' · ' + esc(r.engine || r.source || '') +
+          ' · 净USD <b class="' + ((bt.netUsd || 0) >= 0 ? 'up' : 'dn') + '">' + sgn(bt.netUsd || 0, 4) + '</b>' +
+          ' · 胜率 ' + num(bt.winRate, 2) + '%（平 ' + num(bt.closed, 0) + ' / 持 ' + num(bt.open, 0) + '）</div>' +
+          (r.rootCause ? '<h5 class="ai-gap">🧭 根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
+          '<h5 class="ai-gap">📉 每小时浮亏归因</h5>' + mAnaList(r.floatingLossAnalysis, '暂无') +
+          '<h5 class="ai-gap">✅ 盈利归因</h5>' + renderAnaList(r.profitAnalysis, '暂无') +
+          '<h5 class="ai-gap">❌ 亏损归因</h5>' + renderAnaList(r.lossAnalysis, '暂无') +
+          ((r.codeChanges || []).length ? '<h5 class="ai-gap">🛠 代码改动' +
+            (autoFix.applied ? '（<span class="hl-warn">已自动应用 ' + autoFix.applied + ' 处' +
+              (autoFix.needsRestart ? '，待引擎重启生效' : '') + '</span>）' : '') + '</h5>' +
+            renderCodeBox(r.codeChanges) +
+            ((autoFix.results || []).length ? '<div class="ai-sub">自动改码执行结果</div><ul class="ai-ana">' +
+              autoFix.results.map(function (x) {
+                return '<li><span class="ai-ana-h">【' + esc(x.status) + '】</span>' + esc(x.file) + ' — ' + esc(x.msg) + '</li>';
+              }).join('') + '</ul>' : '') : '') +
+          (r.backtestText && r.backtestText.summary ? '<h5 class="ai-gap">🧪 回测结论</h5><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
+          ((r.conclusions || []).length ? '<h5 class="ai-gap">✅ 结论与建议</h5><ul class="ai-concl">' +
+            r.conclusions.map(function (c) { return '<li>' + fmt(typeof c === 'string' ? c : (c.text || c.title || '')) + '</li>'; }).join('') + '</ul>' : '');
+        bd.innerHTML = h;
+        bd.scrollTop = 0;
+      })
+      .catch(function () { bd.innerHTML = '<div class="ai-empty">加载失败</div>'; });
   }
 
   function renderAI(d) {
@@ -303,6 +448,9 @@
         '<div><span>跨度</span>' + esc(pb.spanText || '—') + ' · ' + esc(pb.events) + ' 笔事件</div>' +
         '</div>' : '<div class="ai-empty">—</div>') +
       '</div></div>' +
+      /* 每小时 AI 总结（历史 · 分页 · 点击行弹窗看详情） */
+      '<h5 class="ai-gap">🕐 每小时 AI 总结（历史 · 分页 · 点击行看详情弹窗）</h5>' +
+      '<div id="ft-ai-hist"></div>' +
       '<div class="ai-lock">🔒 <b>AI 不可修改</b>：' + esc(lock.join(' / ')) +
       ' ｜ 每笔 <b>' + esc(eff.entryUsd) + '$</b> · 加仓 <b>' + esc(eff.addUsd) + '$</b> · 周期 <b>' + esc((eff.tfs || []).join(',')) + '</b>' +
       ' ｜ 当前生效：<span class="hl-warn">止盈 ' + esc(eff.tpPct) + '%</span> / <span class="hl-warn">加仓浮亏 ' + esc(eff.addLossPct) + '%</span> / 间隔 ' + esc(Math.round((eff.addIntervalMs || 0) / 60000)) + ' 分钟' +
@@ -312,6 +460,8 @@
     el.innerHTML = h;
     renderInstSummaryInto(r.trades);
     renderTradesTableInto(r.trades);
+    renderBtInstInto(r.backtest);
+    loadHist();
     renderAiOverview(lastSummary);
     aiMountCharts(r.charts);
     bindInstClicks(el);

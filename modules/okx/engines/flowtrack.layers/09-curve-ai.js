@@ -106,6 +106,62 @@ function aiStrategy() {
 }
 
 let statCache = { at: 0, data: null };
+
+/* ★每小时 AI 总结历史：data/ai_history/ai_YYYYMMDD_HHMMSS.json，由 ai_apply.js 每次分析后落盘。
+ *   aiHistory(page,per) 返回分页摘要列表；aiHistoryDetail(id) 返回单份完整报告（前端弹窗看详情）。 */
+const AI_HIST_DIR = path.join(__dirname, '..', '..', '..', 'data', 'ai_history');
+function aiHistFiles() {
+  try {
+    if (!fs.existsSync(AI_HIST_DIR)) return [];
+    return fs.readdirSync(AI_HIST_DIR)
+      .filter(function (f) { return /^ai_\d{8}_\d{6}\.json$/.test(f); })
+      .sort().reverse();
+  } catch (e) { return []; }
+}
+function aiHistSummary(id, j) {
+  const bt = j.backtest || {};
+  return {
+    id: id,
+    generatedAtBj: j.generatedAtBj || null,
+    engine: j.engine || j.source || '',
+    verdict: String(j.verdict || '').slice(0, 120),
+    netUsd: bt.netUsd != null ? bt.netUsd : null,
+    winRate: bt.winRate != null ? bt.winRate : null,
+    closed: bt.closed || 0, open: bt.open || 0,
+    floats: (j.floatingLossAnalysis || []).length,
+    codes: (j.codeChanges || []).length,
+    autoFixApplied: (j.autoFix && j.autoFix.applied) || 0,
+    trades: Array.isArray(j.trades) ? j.trades.length : 0
+  };
+}
+function aiHistory(page, per) {
+  page = Math.max(1, +page || 1);
+  per = Math.min(100, Math.max(5, +per || 10));
+  const files = aiHistFiles();
+  const total = files.length;
+  const pages = Math.max(1, Math.ceil(total / per));
+  if (page > pages) page = pages;
+  const items = [];
+  for (const f of files.slice((page - 1) * per, (page - 1) * per + per)) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(AI_HIST_DIR, f), 'utf8'));
+      items.push(aiHistSummary(f.replace(/^ai_/, '').replace(/\.json$/, ''), j));
+    } catch (e) { }
+  }
+  return { ok: true, page: page, per: per, total: total, pages: pages, items: items };
+}
+function aiHistoryDetail(id) {
+  const idStr = String(id || '').replace(/[^0-9_]/g, '');
+  const f = 'ai_' + idStr + '.json';
+  if (!/^ai_\d{8}_\d{6}\.json$/.test(f) || !fs.existsSync(path.join(AI_HIST_DIR, f))) {
+    return { ok: false, err: '历史不存在: ' + idStr };
+  }
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(AI_HIST_DIR, f), 'utf8'));
+    j.historyId = idStr;
+    return { ok: true, report: j };
+  } catch (e) { return { ok: false, err: '历史读取失败: ' + e.message }; }
+}
 /* base 为法币锚定稳定币的合约永久排除，不参与任何信号/记录/合约列表。 */
 const STABLE_BASES = ['USDC','USDT','DAI','FDUSD','TUSD','BUSD','USDE','USDG','PYUSD','EURC','USDP','USDD','FRAX','LUSD','GUSD','SUSD','USDB','CRVUSD','RLUSD','XUSD','USDX','EURT','AEUR','EURR','USDS'];
 const STABLE_EXCL = STABLE_BASES.map(function (b) { return "inst_id NOT GLOB '" + b + "-*-SWAP'"; }).join(' AND ');

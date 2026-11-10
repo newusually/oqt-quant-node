@@ -45,6 +45,9 @@ cat > "$TMP/prompt_head.txt" <<'PROMPT'
  "lossAnalysis": [
    {"pid":"轮次ID或'归类'","inst":"合约","why":"**为什么亏损**：结合浮亏加仓后继续反向、横盘消耗、信号失效、未触止盈等，≤120 字"}
  ],
+ "floatingLossAnalysis": [
+   {"pid":"持仓轮次ID","inst":"合约","dir":"多/空","floatPct":"当前浮亏百分比(负数,来自openPositions)","why":"**每小时浮亏原因**：该仓位此刻为何浮亏（反向趋势/加仓摊薄中/横盘等待信号/入场点差等），≤100 字"}
+ ],
  "signalReport": [
    {"ev":"buy/sell/add/close","inst":"合约","pnl":"该信号对应USD盈亏(平仓写net，其余写成本或—)","why":"≤80 字"}
  ],
@@ -58,7 +61,7 @@ cat > "$TMP/prompt_head.txt" <<'PROMPT'
  "conclusions": ["可执行结论，≤50 字，最多 6 条"],
  "params": {"tpPct":5,"addLossPct":0,"addIntervalMs":3600000},
  "codeChanges": [
-   {"title":"改动点","code":"**实际代码改动**片段(如 PYR.TP_PCT=5; 或 pyrEntrySignal 替换 pyrMacdDir)，≤200 字","desc":"为什么这样改、预期效果，≤120 字"}
+   {"title":"改动点","file":"modules/okx/engines/flowtrack.layers/07-pyramid.js","oldCode":"将被替换的现有代码片段(必须与文件内容逐字符一致且唯一)","newCode":"替换后的完整代码片段","desc":"为什么这样改、预期效果，≤120 字"}
  ]
 }
 
@@ -85,6 +88,16 @@ cat > "$TMP/prompt_head.txt" <<'PROMPT'
    **若区间内已平亏损为 0 笔，lossAnalysis 必须恰好返回一条** why='回测区间已平 N 笔（盈利 W / 亏损 0），暂无已平亏损可供归因；当前 M 笔持仓详见未平仓位监控' 的说明条目——**禁止留空**，也禁止用「暂无」二字敷衍。
 10) signalReport 必须基于 signals/trades 给出：所有买卖/加仓信号的盈亏分布结论（可归类+举典型 pid），
    并明确哪些是盈利信号、哪些是亏损信号、整体信号质量如何。
+11) 【每小时浮亏归因，不可省略】floatingLossAnalysis 必须基于快照 openPositions（当前持仓按实时浮亏排序）
+   逐笔分析浮亏最大的前 10 笔：每笔给出真实 floatPct 与原因（反向趋势启动/加仓摊薄进行中/横盘未触发信号/
+   入场时机偏差等），并结合「下一小时是否可能触发加仓(需零轴翻转信号同向)」给出观察判断。禁止空数组。
+12) 【自动改码】codeChanges 中的改动会被系统**自动应用**到代码文件（先备份→精确替换→node --check 语法校验→
+   失败自动回滚），因此必须严格遵守：
+   - file 仅允许 modules/okx/engines/flowtrack.layers/*.js 或 scripts/*.js 中的已存在文件；
+   - oldCode 必须逐字符复制自当前文件内容、且在该文件中**唯一**出现（建议 3~10 行，含足够上下文）；
+   - newCode 是替换后的完整片段，保持代码风格与缩进一致；
+   - 只做保守、可验证的修改（阈值/条件/日志/防御性检查），禁止改资金、下单主流程、删除安全检查；
+   - 不确定就不要输出 codeChanges 条目，宁可留空数组也不输出模糊改法。
 
 【数据说明】下面仅附精简快照（period/realized/backtest/trades 全量逐轮盈亏）；
 完整 394 条原始买卖信号与逐笔明细由系统透传至前端报表，你据此强制归因，不得省略任何一笔。
@@ -100,7 +113,9 @@ for m in $MODELS; do
   rc=$?
   if [ "$rc" -ne 0 ] || [ ! -s "$TMP/raw.txt" ]; then log "模型 $m 调用失败 rc=$rc，切换下一个"; continue; fi
   if node "$ROOT/scripts/ai_apply.js" "$TMP/raw.txt" "$DATA" "$m" "$TMP/snapshot.json" >>"$LOG" 2>&1; then
-    log "模型 $m 分析成功并已落盘"; ok=1; break
+    log "模型 $m 分析成功并已落盘"; ok=1
+    node "$ROOT/scripts/ai_autofix.js" >>"$LOG" 2>&1 || log '自动改码执行失败(不影响策略落盘)'
+    break
   fi
   log "模型 $m 输出校验失败，切换下一个"
 done

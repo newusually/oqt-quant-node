@@ -96,7 +96,7 @@ module.exports = {
   start, stats, settle, subscribe,
   jumpHistory, jumpInsts, jumpTradesByInst,   // 保留旧路由名（委托到金字塔）
   pyrSummary: pyrSummaryCalc, pyrInsts, pyrTrades, pyrMarks, pyrAll, pyrPositions,
-  aiStrategy, aiRead, curve, equityCurve, recordEquity,   // AI 策略面板 / 曲线数据
+  aiStrategy, aiRead, aiHistory, aiHistoryDetail, curve, equityCurve, recordEquity,   // AI 策略面板 / 历史 / 曲线数据
   STABLE_BASES
 };
 

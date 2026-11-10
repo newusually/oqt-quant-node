@@ -151,6 +151,21 @@
       '#' + BOX + ' .ai-trades .mono{font-family:Consolas,Menlo,monospace;font-size:10px;color:#8fb0e8}' +
       '#' + BOX + ' .pager .pg-info{color:#a9bcda;font-size:11.5px;white-space:nowrap;padding:0 6px}' +
       '#' + BOX + ' .pager .pg-per{background:#16233b;color:#a9c2ee;border:1px solid #2b3f63;border-radius:6px;padding:3px 6px;font-size:11.5px;cursor:pointer;margin-left:4px}' +
-      '#' + BOX + ' .pager .pg-per:hover{border-color:#3d7bff}';
+      '#' + BOX + ' .pager .pg-per:hover{border-color:#3d7bff}' +
+      /* 每小时 AI 总结历史表 + 详情弹窗（悬浮窗，样式与面板一致） */
+      '#' + BOX + ' .ai-btinst-wrap{margin-top:8px}' +
+      '#' + BOX + ' .hist-row{cursor:pointer}' +
+      '#' + BOX + ' .hist-row:hover td{background:#1a2c4a}' +
+      '#' + BOX + ' .hist-verdict{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '#' + BOX + ' .hist-open{color:#3d7bff;font-weight:700;white-space:nowrap}' +
+      '#' + BOX + ' .ai-modal-ov{position:fixed;inset:0;z-index:9999;background:rgba(3,9,22,.72);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:26px}' +
+      '#' + BOX + ' .ai-modal{width:min(940px,94vw);max-height:88vh;display:flex;flex-direction:column;background:#0e1a30;border:1px solid #2a3f63;border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.55);overflow:hidden}' +
+      '#' + BOX + ' .ai-modal-hd{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 18px;background:#12203a;border-bottom:1px solid #22314e;flex:0 0 auto}' +
+      '#' + BOX + ' .ai-modal-hd h4{margin:0;font-size:14px;color:#a9c2ee}' +
+      '#' + BOX + ' .ai-modal-x{background:#1b2a45;border:1px solid #2b3f63;color:#a9c2ee;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:14px;flex:0 0 auto}' +
+      '#' + BOX + ' .ai-modal-x:hover{border-color:#3d7bff;color:#fff}' +
+      '#' + BOX + ' .ai-modal-bd{overflow:auto;padding:14px 18px;font-size:12px;color:#c9d6ee;line-height:1.65;flex:1 1 auto}' +
+      '#' + BOX + ' .ai-modal-bd h5{margin:12px 0 4px;font-size:12px;color:#cfe0ff}' +
+      '#' + BOX + ' .ai-meta-m{color:#8b9abc;font-size:11.5px;margin-top:6px}';
     document.head.appendChild(st);
   }
