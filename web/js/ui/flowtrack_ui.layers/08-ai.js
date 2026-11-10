@@ -25,6 +25,10 @@
     var net = (t.netUsd == null) ? null : +t.netUsd;
     var cls = net == null ? 'flat' : (net >= 0 ? 'up' : 'dn');
     var out = t.outcome === '持仓中' ? '持仓中' : (net >= 0 ? '盈利' : '亏损');
+    var flPct = (t.floatPct == null) ? null : +t.floatPct;
+    var flUsd = (t.floatUsd == null) ? null : +t.floatUsd;
+    var flHtml = (t.outcome !== '持仓中' || flPct == null) ? '—'
+      : '<span class="hl-red">' + flPct.toFixed(2) + '%</span>' + (flUsd == null ? '' : ' <span class="' + (flUsd >= 0 ? 'up' : 'dn') + '">' + sgn(flUsd, 4) + '</span>');
     return '<tr>' +
       '<td class="mono">' + esc((t.pid || '').slice(0, 18)) + '</td>' +
       '<td class="inst">' + esc(t.inst) + '</td>' +
@@ -33,6 +37,7 @@
       '<td>' + num(t.adds, 0) + '</td>' +
       '<td>' + (t.exitPx == null ? '—' : num(t.exitPx, 4)) + '</td>' +
       '<td class="' + cls + '">' + (net == null ? '—' : sgn(net, 4)) + '</td>' +
+      '<td>' + flHtml + '</td>' +
       '<td class="' + cls + '">' + esc(out) + '</td>' +
       '<td>' + (t.holdMin == null ? '—' : num(t.holdMin, 0) + '′') + '</td>' +
     '</tr>';
@@ -119,7 +124,7 @@
     var slice = trades.slice(start, start + per);
     var rows = slice.map(tradeRow).join('');
     var table = '<div class="ai-trades"><table><thead><tr>' +
-      '<th>轮次</th><th>合约</th><th>方向</th><th>入场价</th><th>加仓</th><th>出场价</th><th>净USD</th><th>归类</th><th>持仓</th>' +
+      '<th>轮次</th><th>合约</th><th>方向</th><th>入场价</th><th>加仓</th><th>出场价</th><th>净USD</th><th>浮亏</th><th>归类</th><th>持仓</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     var perOpts = [10, 20, 30, 50, 100].map(function (p) {
       return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
@@ -139,6 +144,61 @@
     });
     wrap.querySelectorAll('select.pg-per').forEach(function (s) {
       s.addEventListener('change', function () { aiTradesPer = +s.value; aiTradesPage = 1; renderTradesTableInto(trades); });
+    });
+    if (typeof paintTable === 'function') { try { paintTable(wrap.querySelector('.ai-trades table')); } catch (e) { } }
+  }
+  /* ===== 每笔事件明细（买入/卖出/加仓/平仓 · 每笔带规则原因 · 分页） ===== */
+  var aiEvPage = 1, aiEvPer = 10;
+  var EV_NAMES = { buy: '买入开多', sell: '卖出开空', add: '加仓', close: '平仓' };
+  function evReason(s) {
+    if (s.ev === 'buy') return '入场做多：MACD 零轴翻转（前≥20 根反向柱后翻多），按 15m K线边界执行，投入 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);
+    if (s.ev === 'sell') return '入场做空：MACD 零轴翻转（前≥20 根反向柱后翻空），按 15m K线边界执行，投入 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);
+    if (s.ev === 'add') return '加仓摊薄：满 1 小时 + 该轮浮亏 > 0 + 出现同向零轴翻转信号，加投 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);
+    if (s.ev === 'close') return (+s.net >= 0 ? '止盈平仓：浮盈 ≥ 5% 触发，净 ' + sgn(s.net, 4) + ' USD' : '平仓退出：净 ' + sgn(s.net, 4) + ' USD');
+    return '事件 ' + (s.ev || '—');
+  }
+  function renderEventsTableInto(signals) {
+    var wrap = document.getElementById('ft-ai-events');
+    if (!wrap) return;
+    if (!signals || !signals.length) { wrap.innerHTML = '<div class="ai-empty">暂无事件</div>'; return; }
+    var per = aiEvPer, total = signals.length;
+    var pages = Math.max(1, Math.ceil(total / per));
+    if (aiEvPage > pages) aiEvPage = pages;
+    if (aiEvPage < 1) aiEvPage = 1;
+    var slice = signals.slice((aiEvPage - 1) * per, (aiEvPage - 1) * per + per);
+    var rows = slice.map(function (s) {
+      var net = (s.ev === 'close') ? +s.net : null;
+      return '<tr>' +
+        '<td class="mono">' + esc((s.t || '').replace(' (北京时间)', '')) + '</td>' +
+        '<td>' + esc(EV_NAMES[s.ev] || s.ev || '—') + '</td>' +
+        '<td class="inst">' + esc(s.inst) + '</td>' +
+        '<td class="' + (s.dir === '多' ? 'up' : 'dn') + '">' + esc(s.dir) + '</td>' +
+        '<td>' + num(s.px, 6) + '</td>' +
+        '<td>' + num(s.cost, 4) + '</td>' +
+        '<td class="' + (net == null ? 'flat' : (net >= 0 ? 'up' : 'dn')) + '">' + (net == null ? '—' : sgn(net, 4)) + '</td>' +
+        '<td class="ev-why">' + esc(evReason(s)) + '</td>' +
+      '</tr>';
+    }).join('');
+    var perOpts = [10, 20, 50, 100].map(function (p) {
+      return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
+    }).join('');
+    wrap.innerHTML = '<div class="ai-trades"><table><thead><tr>' +
+      '<th>时间</th><th>事件</th><th>合约</th><th>方向</th><th>价格</th><th>成本USD</th><th>净USD</th><th>原因</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="pager">' +
+      '<button class="pg' + (aiEvPage <= 1 ? ' dis' : '') + '" data-pg="' + (aiEvPage - 1) + '"' + (aiEvPage <= 1 ? ' disabled' : '') + '>« 上一页</button>' +
+      '<span class="pg-info">第 ' + aiEvPage + ' / ' + pages + ' 页 · 共 ' + total + ' 笔事件</span>' +
+      '<button class="pg' + (aiEvPage >= pages ? ' dis' : '') + '" data-pg="' + (aiEvPage + 1) + '"' + (aiEvPage >= pages ? ' disabled' : '') + '>下一页 »</button>' +
+      '<select class="pg-per">' + perOpts + '</select>' +
+      '</div>';
+    wrap.querySelectorAll('button.pg').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = +b.getAttribute('data-pg');
+        if (p >= 1 && p <= pages) { aiEvPage = p; renderEventsTableInto(signals); }
+      });
+    });
+    wrap.querySelectorAll('select.pg-per').forEach(function (s) {
+      s.addEventListener('change', function () { aiEvPer = +s.value; aiEvPage = 1; renderEventsTableInto(signals); });
     });
     if (typeof paintTable === 'function') { try { paintTable(wrap.querySelector('.ai-trades table')); } catch (e) { } }
   }
@@ -366,8 +426,10 @@
     wrap.innerHTML = '<div class="ai-trades"><table><thead><tr>' +
       '<th>时间</th><th>结论</th><th>净USD</th><th>胜率</th><th>平/持</th><th>浮亏归因</th><th>代码改动</th><th>操作</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>' + pager;
-    wrap.querySelectorAll('tr.hist-row').forEach(function (tr) {
-      tr.addEventListener('click', function () { openHistModal(tr.getAttribute('data-id')); });
+    /* 事件委托：点击行任意位置打开详情弹窗（含「详情 »」格） */
+    wrap.addEventListener('click', function (e) {
+      var tr = e.target && e.target.closest ? e.target.closest('tr.hist-row') : null;
+      if (tr && tr.getAttribute('data-id')) openHistModal(tr.getAttribute('data-id'));
     });
     wrap.querySelectorAll('button[data-hpg]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -378,7 +440,7 @@
     var sel = wrap.querySelector('select.pg-per');
     if (sel) sel.addEventListener('change', function () { aiHistPer = +sel.value; aiHistPage = 1; loadHist(); });
   }
-  /* 详情弹窗：遮罩 + 悬浮窗（挂进面板内以复用 ai-* 表格样式），点遮罩/✕ 关闭 */
+  /* 详情弹窗：遮罩 + 悬浮窗（挂 document.body，样式全局），点遮罩/✕ 关闭 */
   function closeHistModal() {
     var ov = document.getElementById('ft-ai-modal-ov');
     if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
@@ -392,41 +454,44 @@
     }).join('') + '</ul>';
   }
   function openHistModal(id) {
-    closeHistModal();
-    var panel = document.getElementById(BOX);
-    if (!panel) return;
-    var ov = document.createElement('div');
-    ov.id = 'ft-ai-modal-ov';
-    ov.innerHTML = '<div class="ai-modal"><div class="ai-modal-hd"><h4>🕐 AI 分析详情 · ' + esc(id) +
-      '（北京时间）</h4><button class="ai-modal-x" type="button">✕</button></div>' +
-      '<div class="ai-modal-bd"><div class="ai-empty">加载中…</div></div></div>';
-    panel.appendChild(ov);
-    ov.addEventListener('click', function (e) { if (e.target === ov) closeHistModal(); });
-    ov.querySelector('.ai-modal-x').addEventListener('click', closeHistModal);
-    var bd = ov.querySelector('.ai-modal-bd');
-    fetch('/api/okx/ai_history_detail?id=' + encodeURIComponent(id) + '&v=' + Date.now())
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.ok) { bd.innerHTML = '<div class="ai-empty">' + esc((d && d.err) || '加载失败') + '</div>'; return; }
-        var r = d.report || {};
-        var bt = r.backtest || {};
-        var autoFix = r.autoFix || {};
-        var h = '<div class="ai-verdict"><b>结论 · </b>' + fmt(r.verdict || '（无）') + '</div>' +
-          '<div class="ai-meta-m">🕐 ' + esc(r.generatedAtBj || '') + ' · ' + esc(r.engine || r.source || '') +
-          ' · 净USD <b class="' + ((bt.netUsd || 0) >= 0 ? 'up' : 'dn') + '">' + sgn(bt.netUsd || 0, 4) + '</b>' +
-          ' · 胜率 ' + num(bt.winRate, 2) + '%（平 ' + num(bt.closed, 0) + ' / 持 ' + num(bt.open, 0) + '）</div>' +
-          (r.rootCause ? '<h5 class="ai-gap">🧭 根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
-          '<h5 class="ai-gap">📉 每小时浮亏归因</h5>' + mAnaList(r.floatingLossAnalysis, '暂无') +
-          '<h5 class="ai-gap">✅ 盈利归因</h5>' + renderAnaList(r.profitAnalysis, '暂无') +
-          '<h5 class="ai-gap">❌ 亏损归因</h5>' + renderAnaList(r.lossAnalysis, '暂无') +
-          ((r.codeChanges || []).length ? '<h5 class="ai-gap">🛠 修改的代码（表格 · 自动应用状态）</h5>' +
-            renderCodeTable(r.codeChanges, autoFix) : '') +
-          (r.backtestText && r.backtestText.summary ? '<h5 class="ai-gap">🧪 回测结论</h5><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
-          ((r.conclusions || []).length ? '<h5 class="ai-gap">✅ 改进与建议（表格）</h5>' + renderConclTable(r.conclusions) : '');
-        bd.innerHTML = h;
-        bd.scrollTop = 0;
-      })
-      .catch(function () { bd.innerHTML = '<div class="ai-empty">加载失败</div>'; });
+    try {
+      closeHistModal();
+      var ov = document.createElement('div');
+      ov.id = 'ft-ai-modal-ov';
+      ov.innerHTML = '<div class="ai-modal"><div class="ai-modal-hd"><h4>🕐 AI 分析详情 · ' + esc(id) +
+        '（北京时间）</h4><button class="ai-modal-x" type="button">✕</button></div>' +
+        '<div class="ai-modal-bd"><div class="ai-empty">加载中…</div></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function (e) { if (e.target === ov) closeHistModal(); });
+      var xb = ov.querySelector('.ai-modal-x');
+      if (xb) xb.addEventListener('click', closeHistModal);
+      var bd = ov.querySelector('.ai-modal-bd');
+      fetch('/api/okx/ai_history_detail?id=' + encodeURIComponent(id) + '&v=' + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok) { bd.innerHTML = '<div class="ai-empty">' + esc((d && d.err) || '加载失败') + '</div>'; return; }
+          var r = d.report || {};
+          var bt = r.backtest || {};
+          var autoFix = r.autoFix || {};
+          var h = '<div class="ai-verdict"><b>结论 · </b>' + fmt(r.verdict || '（无）') + '</div>' +
+            '<div class="ai-meta-m">🕐 ' + esc(r.generatedAtBj || '') + ' · ' + esc(r.engine || r.source || '') +
+            ' · 净USD <b class="' + ((bt.netUsd || 0) >= 0 ? 'up' : 'dn') + '">' + sgn(bt.netUsd || 0, 4) + '</b>' +
+            ' · 胜率 ' + num(bt.winRate, 2) + '%（平 ' + num(bt.closed, 0) + ' / 持 ' + num(bt.open, 0) + '）</div>' +
+            (r.rootCause ? '<h5 class="ai-gap">🧭 根因总结</h5><div class="ai-root">' + fmt(r.rootCause) + '</div>' : '') +
+            '<h5 class="ai-gap">📉 每小时浮亏归因</h5>' + mAnaList(r.floatingLossAnalysis, '暂无') +
+            '<h5 class="ai-gap">✅ 盈利归因</h5>' + renderAnaList(r.profitAnalysis, '暂无') +
+            '<h5 class="ai-gap">❌ 亏损归因</h5>' + renderAnaList(r.lossAnalysis, '暂无') +
+            ((r.codeChanges || []).length ? '<h5 class="ai-gap">🛠 修改的代码（表格 · 自动应用状态）</h5>' +
+              renderCodeTable(r.codeChanges, autoFix) : '') +
+            (r.backtestText && r.backtestText.summary ? '<h5 class="ai-gap">🧪 回测结论</h5><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
+            ((r.conclusions || []).length ? '<h5 class="ai-gap">✅ 改进与建议（表格）</h5>' + renderConclTable(r.conclusions) : '');
+          bd.innerHTML = h;
+          bd.scrollTop = 0;
+        })
+        .catch(function (e) { bd.innerHTML = '<div class="ai-empty">加载失败: ' + esc(String(e && e.message || e)) + '</div>'; });
+    } catch (e) {
+      if (global && global.console) global.console.error('[ft-ai] 弹窗异常:', e);
+    }
   }
 
   function renderAI(d) {
@@ -471,17 +536,6 @@
       '<h5 class="ai-gap">✅ 盈利归因（全部盈利笔 · 为什么赚）</h5>' +
       renderAnaList(r.profitAnalysis, '暂无盈利归因') +
       '</div>' +
-      /* 中：分合约净USD/胜率（分页）+ 全部交易明细（逐笔·全量·分页）+ 回测全量汇总 */
-      '<div class="ai-col">' +
-      '<h5>📊 分合约净USD · 胜率（报表 · 分页）</h5>' +
-      '<div id="ft-ai-inst" class="ai-inst-wrap"></div>' +
-      '<h5 class="ai-gap">📋 全部交易明细（逐笔 · 全量 · 分页）</h5>' +
-      '<div id="ft-ai-trades" class="ai-trades-wrap"></div>' +
-      renderOpenMonitor(r.trades) +
-      '<h5 class="ai-gap">🧪 回测全量汇总</h5>' +
-      renderBacktestBox(r.backtest) +
-      (r.backtestText && r.backtestText.summary ? '<div class="ai-sub">AI 回测结论</div><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
-      '</div>' +
       /* 右：亏损归因 + 浮亏归因 + 根因 + 代码修改(表格) + 结论建议(表格) + 窗口 */
       '<div class="ai-col"><h5>❌ 亏损归因（全部亏损笔 · 为什么亏）</h5>' +
       renderLossAnalysis(r) +
@@ -498,6 +552,17 @@
         '<div><span>跨度</span>' + esc(pb.spanText || '—') + ' · ' + esc(pb.events) + ' 笔事件</div>' +
         '</div>' : '<div class="ai-empty">—</div>') +
       '</div></div>' +
+      /* ===== 全宽大表区：分合约 → 逐笔明细 → 每笔事件明细 → 未平仓监控 → 回测汇总 ===== */
+      '<h5 class="ai-gap">📊 分合约净USD · 胜率（报表 · 分页 · 全宽）</h5>' +
+      '<div id="ft-ai-inst" class="ai-inst-wrap"></div>' +
+      '<h5 class="ai-gap">📋 全部交易明细（逐笔 · 全量 · 分页 · 含实时浮亏）</h5>' +
+      '<div id="ft-ai-trades" class="ai-trades-wrap"></div>' +
+      '<h5 class="ai-gap">📜 每笔事件明细（买入/卖出/加仓/平仓 · 每笔带原因 · 分页）</h5>' +
+      '<div id="ft-ai-events" class="ai-trades-wrap"></div>' +
+      renderOpenMonitor(r.trades) +
+      '<h5 class="ai-gap">🧪 回测全量汇总</h5>' +
+      renderBacktestBox(r.backtest) +
+      (r.backtestText && r.backtestText.summary ? '<div class="ai-sub">AI 回测结论</div><div class="ai-root">' + fmt(r.backtestText.summary) + '</div>' : '') +
       /* 每小时 AI 总结（历史 · 分页 · 点击行弹窗看详情） */
       '<h5 class="ai-gap">🕐 每小时 AI 总结（历史 · 分页 · 点击行看详情弹窗）</h5>' +
       '<div id="ft-ai-hist"></div>' +
@@ -510,6 +575,7 @@
     el.innerHTML = h;
     renderInstSummaryInto(r.trades);
     renderTradesTableInto(r.trades);
+    renderEventsTableInto(r.signals);
     renderBtInstInto(r.backtest);
     loadHist();
     renderAiOverview(lastSummary);
