@@ -124,6 +124,17 @@
       '#' + BOX + ' .ai-window span{display:inline-block;width:34px;color:#7f92b8}' +
       '#' + BOX + ' .ai-empty{color:#8b9abc;font-size:12px;padding:8px 0}' +
       '#' + BOX + ' .ai-lock{margin-top:12px;font-size:11px;color:#8fa4c8;border-top:1px dashed #2a3e60;padding-top:9px;line-height:1.8}' +
-      '#' + BOX + ' .ai-lock b{color:#dbe8ff}';
+      '#' + BOX + ' .ai-lock b{color:#dbe8ff}' +
+      /* ===== 全量 Forensic 报表：交易明细表 / 归因 / 根因 / 代码块 ===== */
+      '#' + BOX + ' .ai-trades{max-height:330px;overflow:auto;border:1px solid #22375a;border-radius:8px;margin-bottom:6px;background:#0c1729}' +
+      '#' + BOX + ' .ai-trades table{font-size:11px}' +
+      '#' + BOX + ' .ai-trades .mono{font-family:Consolas,Menlo,monospace;font-size:10px;color:#8fb0e8}' +
+      '#' + BOX + ' .ai-ana{list-style:none;margin:0;padding:0;font-size:11.6px;line-height:1.75;color:#d3e0f7}' +
+      '#' + BOX + ' .ai-ana li{border-left:2px solid #33507e;padding:4px 0 4px 8px;margin:6px 0}' +
+      '#' + BOX + ' .ai-ana-h{color:#ffd28a;font-weight:800;font-size:10.5px;display:inline-block;margin-right:5px}' +
+      '#' + BOX + ' .ai-root{font-size:12px;line-height:1.85;color:#e8f0ff;background:#10203a;border:1px solid #2a4a7a;border-radius:8px;padding:9px 12px;margin-top:4px}' +
+      '#' + BOX + ' .ai-sub{font-size:10.5px;color:#7f92b8;margin:9px 0 3px;font-weight:800;letter-spacing:.3px}' +
+      '#' + BOX + ' .ai-codeblock{background:#0a1424;border:1px solid #2a3f63;border-radius:6px;padding:7px 10px;margin:4px 0 2px;' +
+        'font-family:Consolas,Menlo,monospace;font-size:10.5px;color:#9fe0c0;white-space:pre-wrap;word-break:break-all;line-height:1.55;max-height:190px;overflow:auto}';
     document.head.appendChild(st);
   }

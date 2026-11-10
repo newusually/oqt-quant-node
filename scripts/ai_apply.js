@@ -9,7 +9,7 @@ const [, , RAW, OUT, MODEL, SNAP] = process.argv;
 
 const RULES = {
   tpPct:         { min: 1,          max: 200 },
-  addLossPct:    { min: 1,          max: 200 },
+  addLossPct:    { min: 0,          max: 200 },
   addIntervalMs: { min: 15 * 60000, max: 7 * 86400000 }
 };
 const LOCKED = ['ENTRY_USD', 'ADD_USD', 'TFS', 'KEEP_FOREVER', 'KEEP_FROM_TS'];
@@ -77,6 +77,37 @@ function normStrings(arr, max, len) {
     .map(x => str(typeof x === 'string' ? x : (x && (x.text || x.title || x.desc))))
     .filter(Boolean).map(s => s.slice(0, len));
 }
+function normTradeAnalysis(arr, max) {
+  return (Array.isArray(arr) ? arr : []).slice(0, max).map(function (x) {
+    if (typeof x === 'string') return { pid: '', inst: '', why: x.slice(0, 600) };
+    return {
+      pid: str(x && x.pid).slice(0, 48),
+      inst: str(x && x.inst).slice(0, 32),
+      why: str(x && (x.why || x.text || x.reason || x.detail)).slice(0, 600)
+    };
+  }).filter(function (x) { return x.why; });
+}
+function normSignalReport(arr, max) {
+  return (Array.isArray(arr) ? arr : []).slice(0, max).map(function (x) {
+    if (typeof x === 'string') return { ev: '', inst: '', pnl: '', why: x.slice(0, 300) };
+    return {
+      ev: str(x && x.ev).slice(0, 16),
+      inst: str(x && x.inst).slice(0, 32),
+      pnl: str(x && x.pnl).slice(0, 32),
+      why: str(x && (x.why || x.text || x.reason)).slice(0, 300)
+    };
+  }).filter(function (x) { return x.why || x.ev; });
+}
+function normCodeChanges(arr, max) {
+  return (Array.isArray(arr) ? arr : []).slice(0, max).map(function (x) {
+    if (typeof x === 'string') return { title: '', code: '', desc: x.slice(0, 400) };
+    return {
+      title: str(x && (x.title || x.name)).slice(0, 80),
+      code: str(x && x.code).slice(0, 1200),
+      desc: str(x && (x.desc || x.text || x.detail)).slice(0, 400)
+    };
+  }).filter(function (x) { return x.desc || x.code; });
+}
 
 if (!RAW || !OUT) fail('缺少参数');
 if (!fs.existsSync(RAW)) fail('CLI 输出文件不存在');
@@ -130,15 +161,26 @@ const out = {
   verdict: rep.verdict.trim().slice(0, 300),
   highlights: normHighlights(rep),
   steps: normSteps(rep),
-  mindmap: rep.mindmap && typeof rep.mindmap === 'object' ? rep.mindmap : { name: '策略评估', children: [] },
+  profitAnalysis: normTradeAnalysis(rep.profitAnalysis, 300),
+  lossAnalysis: normTradeAnalysis(rep.lossAnalysis, 300),
+  signalReport: normSignalReport(rep.signalReport, 300),
+  rootCause: str(rep.rootCause).slice(0, 4000),
+  backtestText: (rep.backtest && typeof rep.backtest === 'object') ? rep.backtest : null,
   metrics: (Array.isArray(rep.metrics) ? rep.metrics : []).slice(0, 100),
   charts,
   periodBj: sp ? { from: sp.from || null, to: sp.to || null, spanText: sp.spanText || null, events: sp.events || 0 } : null,
   conclusions: normStrings(rep.conclusions, 8, 200),
   params,
-  codeChanges: normStrings(rep.codeChanges, 6, 200),
+  codeChanges: normCodeChanges(rep.codeChanges, 16),
   audit: { model: MODEL || 'unknown', rejected, locked: LOCKED, appliedAt: bj(Date.now()) }
 };
+/* ===== 透传快照全量 Forensic 数据（保证前端报表 100% 完整，不依赖模型输出长度） ===== */
+if (snap) {
+  if (Array.isArray(snap.trades)) out.trades = snap.trades;
+  if (Array.isArray(snap.signals)) out.signals = snap.signals;
+  if (snap.backtest) out.backtest = snap.backtest;
+}
+
 const tmp = OUT + '.tmp';
 fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
 fs.renameSync(tmp, OUT);
