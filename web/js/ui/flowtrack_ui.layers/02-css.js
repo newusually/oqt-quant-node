@@ -135,6 +135,20 @@
       '#' + BOX + ' .ai-root{font-size:12px;line-height:1.85;color:#e8f0ff;background:#10203a;border:1px solid #2a4a7a;border-radius:8px;padding:9px 12px;margin-top:4px}' +
       '#' + BOX + ' .ai-sub{font-size:10.5px;color:#7f92b8;margin:9px 0 3px;font-weight:800;letter-spacing:.3px}' +
       '#' + BOX + ' .ai-codeblock{background:#0a1424;border:1px solid #2a3f63;border-radius:6px;padding:7px 10px;margin:4px 0 2px;' +
-        'font-family:Consolas,Menlo,monospace;font-size:10.5px;color:#9fe0c0;white-space:pre-wrap;word-break:break-all;line-height:1.55;max-height:190px;overflow:auto}';
+        'font-family:Consolas,Menlo,monospace;font-size:10.5px;color:#9fe0c0;white-space:pre-wrap;word-break:break-all;line-height:1.55;max-height:190px;overflow:auto}' +
+      /* 全量交易明细报表：分合约净USD/胜率汇总 + 分页 */
+      '#' + BOX + ' .ai-inst-sum{width:100%;font-size:11px;margin:2px 0 8px;max-height:320px;overflow:auto}' +
+      '#' + BOX + ' .ai-inst-sum th{background:#1b2a45;color:#a9c2ee;text-align:right;padding:5px 7px;position:sticky;top:0;white-space:nowrap}' +
+      '#' + BOX + ' .ai-inst-sum td{text-align:right;padding:4px 7px;border-top:1px solid #22314e;white-space:nowrap}' +
+      '#' + BOX + ' .ai-inst-sum th:first-child,#' + BOX + ' .ai-inst-sum td:first-child{text-align:left;color:#7fb1ff}' +
+      '#' + BOX + ' .ai-inst-sum tr.ai-sum-row td{font-weight:800;background:#13203a;border-top:2px solid #33507e}' +
+      '#' + BOX + ' .ai-inst-sum tbody tr:hover td{background:#1a2c4a}' +
+      '#' + BOX + ' .ai-trades-wrap{margin-bottom:6px}' +
+      '#' + BOX + ' .ai-trades{max-height:460px;overflow:auto;border:1px solid #22375a;border-radius:8px;margin-bottom:6px;background:#0c1729}' +
+      '#' + BOX + ' .ai-trades table{font-size:11px}' +
+      '#' + BOX + ' .ai-trades .mono{font-family:Consolas,Menlo,monospace;font-size:10px;color:#8fb0e8}' +
+      '#' + BOX + ' .pager .pg-info{color:#a9bcda;font-size:11.5px;white-space:nowrap;padding:0 6px}' +
+      '#' + BOX + ' .pager .pg-per{background:#16233b;color:#a9c2ee;border:1px solid #2b3f63;border-radius:6px;padding:3px 6px;font-size:11.5px;cursor:pointer;margin-left:4px}' +
+      '#' + BOX + ' .pager .pg-per:hover{border-color:#3d7bff}';
     document.head.appendChild(st);
   }
