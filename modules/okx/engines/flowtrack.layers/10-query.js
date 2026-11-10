@@ -52,6 +52,44 @@ function pyrInsts(limit) {
   return { ok: true, insts: rows };
 }
 
+/* ★行级富化：补充「开仓价格 entryPx」与「浮盈浮亏% unrealPct」。
+ *   - 未平仓：从内存 pyramids 直接取实时 entryPx 与实时浮亏%（净浮盈/总投入）。
+ *   - 已平仓：从 pyr 表取该 pid 的平仓净USD与成本，反推已实现%（开仓价取首笔买多/卖空事件价）。
+ *   每页最多 15 个 pid，额外 2 条查询，开销极小。 */
+function pyrEnrich(rows) {
+  if (!rows || !rows.length) return;
+  const openMap = {};
+  for (const [, p] of pyramids) if (!p.closed) openMap[p.pid] = p;
+  const pids = rows.map(r => r.pid).filter(Boolean);
+  const closeMap = {};
+  if (pids.length && db) {
+    const ph = pids.map(() => '?').join(',');
+    const cls = db.prepare(`SELECT pid, net_bp, cost, qty, px FROM pyr WHERE event='close' AND pid IN (${ph})`).all(...pids);
+    for (const c of cls) closeMap[c.pid] = c;
+    const ops = db.prepare(`SELECT pid, px FROM pyr WHERE event IN ('buy','sell') AND pid IN (${ph}) ORDER BY ts ASC`).all(...pids);
+    for (const o of ops) if (closeMap[o.pid] && closeMap[o.pid]._openPx == null) closeMap[o.pid]._openPx = +o.px;
+  }
+  for (const r of rows) {
+    const op = openMap[r.pid];
+    if (op) {
+      const b = books.get(op.instId);
+      const px = b && b.bids.length && b.asks.length ? (op.dir > 0 ? +b.bids[0][0] : +b.asks[0][0]) : op.entryPx;
+      const avg = op.totalCost / op.totalQty;
+      const gU = op.dir * (px - avg) * op.totalQty;
+      const nU = gU - op.totalFee;
+      r.entryPx = +op.entryPx.toFixed(6);
+      r.unrealPct = op.totalCost > 0 ? +(nU / op.totalCost * 100).toFixed(2) : 0;
+    } else if (closeMap[r.pid]) {
+      const c = closeMap[r.pid];
+      const cost = +c.cost || 0;
+      r.entryPx = c._openPx != null ? +c._openPx.toFixed(6) : (cost > 0 && +c.qty > 0 ? +(cost / +c.qty).toFixed(6) : 0);
+      r.unrealPct = cost > 0 ? +((+c.net_bp || 0) / cost * 100).toFixed(2) : 0;
+    } else {
+      r.entryPx = null; r.unrealPct = null;
+    }
+  }
+}
+
 /* 某合约的金字塔事件（买多/卖空/加仓/平仓）：marks=1 返回全部供 K线叠加，否则分页供明细表 */
 function pyrTrades(inst, page, marks) {
   if (!db) return { ok: false, err: '数据库未初始化' };
@@ -60,7 +98,7 @@ function pyrTrades(inst, page, marks) {
   const where = `inst_id=? AND ${STABLE_EXCL}`;
   const toRow = function (r) {
     return {
-      id: r.id, ts: r.ts, inst: r.inst_id, tf: r.tf,
+      id: r.id, ts: r.ts, pid: r.pid, inst: r.inst_id, tf: r.tf,
       dir: r.dir > 0 ? '多' : '空',
       event: r.event,
       eventLabel: pyrEventLabel(r),
@@ -72,7 +110,7 @@ function pyrTrades(inst, page, marks) {
   };
   if (marks) {
     const rows = db.prepare(
-      `SELECT id, ts, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+      `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
        FROM pyr WHERE ${where} ORDER BY ts ASC LIMIT 4000`).all(inst);
     return { ok: true, inst: inst, marks: true, count: rows.length, rows: rows.map(toRow) };
   }
@@ -82,17 +120,19 @@ function pyrTrades(inst, page, marks) {
   page = Math.min(page, totalPages);
   const off = (page - 1) * PER;
   const rows = db.prepare(
-    `SELECT id, ts, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
      FROM pyr WHERE ${where} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(inst, PER, off);
   const sum = db.prepare(
     `SELECT COUNT(*) n,
         SUM(CASE WHEN event='close' THEN net_bp ELSE 0 END) net,
         SUM(CASE WHEN event='buy' OR event='sell' THEN 1 ELSE 0 END) opens
      FROM pyr WHERE ${where}`).get(inst) || { n: 0, net: 0, opens: 0 };
+  const mapped = rows.map(toRow);
+  pyrEnrich(mapped);
   return {
     ok: true, inst: inst, page: page, per: PER, total: total, totalPages: totalPages,
     summary: { n: sum.n, netBp: +(+sum.net).toFixed(1), opens: sum.opens },
-    rows: rows.map(toRow)
+    rows: mapped
   };
 }
 
@@ -124,8 +164,10 @@ function pyrPositions(page, tf, ev) {
     all.push({
       pid: p.pid, inst: p.instId, tf: p.tf, dir: p.dir > 0 ? '多' : '空',
       entryPx: +p.entryPx.toFixed(6), avgPx: +avg.toFixed(6),
+      px: +px.toFixed(6),
       totalQty: +p.totalQty.toFixed(8), totalCost: +p.totalCost.toFixed(6),
       adds: p.adds, unrealGross: +grossU.toFixed(6), netUnreal: +netU.toFixed(6),
+      unrealPct: p.totalCost > 0 ? +(netU / p.totalCost * 100).toFixed(2) : 0,
       holdingUSD: +(p.totalQty * px).toFixed(6),
       underwater: (p.dir > 0 ? px < avg : px > avg),
       entryTs: p.entryTs, lastAddTs: p.lastAddTs
@@ -193,7 +235,7 @@ function pyrAll(page, sort, order, tf, ev) {
   page = Math.min(page, totalPages);
   const off = (page - 1) * PER;
   const rows = db.prepare(
-    `SELECT id, ts, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
      FROM pyr WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...f.args, PER, off);
   const sum = db.prepare(
     `SELECT COUNT(*) n,
@@ -205,12 +247,13 @@ function pyrAll(page, sort, order, tf, ev) {
         SUM(CASE WHEN event='close' THEN 1 ELSE 0 END) closes
      FROM pyr WHERE ${where}`).get(...f.args) || { n: 0, net: 0, opens: 0, adds: 0, addLong: 0, addShort: 0, closes: 0 };
   const list = rows.map(r => ({
-    id: r.id, ts: r.ts, inst: r.inst_id, tf: r.tf, dir: r.dir > 0 ? '多' : '空',
+    id: r.id, ts: r.ts, pid: r.pid, inst: r.inst_id, tf: r.tf, dir: r.dir > 0 ? '多' : '空',
     event: r.event, eventLabel: pyrEventLabel(r),
     px: +(+r.px).toFixed(6), qty: +(+r.qty).toFixed(8), cost: +(+r.cost).toFixed(6),
     unreal: r.unreal == null ? null : +(+r.unreal).toFixed(6),
     netBp: r.net_bp == null ? null : +(+r.net_bp).toFixed(6)
   }));
+  pyrEnrich(list);
   return {
     ok: true, page, per: PER, total, totalPages, sort: sort || '', order: order || '',
     tf: f.tf, ev: f.ev,
@@ -245,8 +288,10 @@ function stats() {
     open.push({
       pid: p.pid, inst: p.instId, tf: p.tf, dir: p.dir > 0 ? '多' : '空',
       entryPx: +p.entryPx.toFixed(6), avgPx: +avg.toFixed(6),
+      px: +px.toFixed(6),
       totalQty: +p.totalQty.toFixed(8), totalCost: +p.totalCost.toFixed(6),
       adds: p.adds, unrealGross: +grossU.toFixed(6), netUnreal: +netU.toFixed(6),
+      unrealPct: p.totalCost > 0 ? +(netU / p.totalCost * 100).toFixed(2) : 0,
       holdingUSD: +(p.totalQty * px).toFixed(6),
       underwater: (p.dir > 0 ? px < avg : px > avg),
       entryTs: p.entryTs, lastAddTs: p.lastAddTs
@@ -312,6 +357,7 @@ function stats() {
     summary,
     open,
     curve: curve(),
+    equity: equityCurve(),
     recent,
     snapshots: snaps
   };

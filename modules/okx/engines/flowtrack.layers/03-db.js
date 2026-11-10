@@ -45,6 +45,11 @@ function initDb() {
       pid TEXT PRIMARY KEY, inst_id TEXT, tf TEXT, dir INTEGER,
       entry_ts INTEGER, entry_px REAL, total_qty REAL, total_cost REAL,
       adds INTEGER, last_add_ts INTEGER, closed INTEGER)`);
+  /* ★实时持仓曲线采样：每 30 秒落一次全部未平仓金字塔的实时净浮盈 USD（永久保留，不删） */
+  db.exec(`CREATE TABLE IF NOT EXISTS pyr_equity(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER, n_open INTEGER, net_unreal REAL, holding_usd REAL, position_usd REAL)`);
+  db.exec('CREATE INDEX IF NOT EXISTS ix_equity_ts ON pyr_equity(ts)');
   try { db.exec('CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)'); } catch (e) { }
   const row = db.prepare("SELECT v FROM meta WHERE k='startedAt'").get();
   if (row && row.v) startedAt = +row.v;

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# ai_daily.sh — 每天零点：交易快照 → CodeBuddy/Hy4 分析 → 校验 → 写 data/ai_strategy.json
+# ai_daily.sh — 每小时：交易快照（累计复盘）→ CodeBuddy/Hy4 分析 → 校验 → 写 data/ai_strategy.json
 # 图表数据由快照生成，AI 只产出精简文字结论；额度耗尽自动切下一个候选模型。
+# 快照读取自 2026-11-01 起全部历史（永久保留），因此每次都是基于全量数据的累计复盘。
 set -u
 ROOT=/home/ubuntu/oqt-quant-node
 DATA="$ROOT/data/ai_strategy.json"
@@ -13,7 +14,7 @@ export CODEBUDDY_CONFIG_DIR=/root/.codebuddy
 MODELS="${AI_MODELS:-hy4-preview hy3 deepseek-v4.1-flash default-model}"
 
 log() { printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
-log '===== 每日 AI 分析开始 ====='
+log '===== 每小时 AI 分析（累计复盘）开始 ====='
 
 node "$ROOT/scripts/ai_snapshot.js" "$DB" > "$TMP/snapshot.json" 2>>"$LOG" || { log '快照生成失败，终止'; exit 1; }
 
@@ -57,7 +58,10 @@ cat > "$TMP/prompt.txt" <<'PROMPT'
    params 只允许 tpPct / addLossPct / addIntervalMs 三个键，范围 1~200 / 1~200 / 900000~604800000。
 6) 当前规则：止盈 10%；加仓 = 满 1 小时 + 浮亏 > 1% + 当前 15m MACD 柱方向与持仓同向（买多仓柱>0 / 卖空仓柱<0）。注意：只有「入场」用零轴翻转信号，加仓不看翻转。
    分析「加仓行为」时必须核对这三个条件能否同时满足，并区分「入场翻转信号」与「加仓柱方向」。
+   此外：买卖/加仓严格按每根 15m K线边界后窗口执行（每 15 分钟最多一次），平仓后同合约冷却 1 根K线。
 7) 图表由脚本从快照生成，你不需要输出任何图表数据。
+8) 本次为【每小时累计复盘】：快照已包含自 2026-11-01 起全部历史数据，请基于全量累计视角评估，
+   重点对比上一版结论的变化趋势（盈利/亏损/持仓结构是否改善），并给出下一小时的关注点。
 
 快照：
 PROMPT
@@ -76,4 +80,4 @@ for m in $MODELS; do
 done
 
 if [ "$ok" -ne 1 ]; then log '所有候选模型均失败，保留上一版 ai_strategy.json'; exit 1; fi
-log '===== 每日 AI 分析结束 ====='
+log '===== 每小时 AI 分析（累计复盘）结束 ====='

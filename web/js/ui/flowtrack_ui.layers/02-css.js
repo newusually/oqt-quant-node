@@ -27,7 +27,15 @@
       '#' + BOX + ' th{background:#1b2a45;color:#a9c2ee;text-align:right;padding:6px 9px;position:sticky;top:0;white-space:nowrap;z-index:1}' +
       '#' + BOX + ' td{text-align:right;padding:5px 9px;border-top:1px solid #22314e;white-space:nowrap}' +
       '#' + BOX + ' th:nth-child(2),#' + BOX + ' td:nth-child(2),#' + BOX + ' th:nth-child(3),#' + BOX + ' td:nth-child(3){text-align:left}' +
-      '#' + BOX + ' tr.r:hover{background:#16233b}' +
+      /* ★整行 hover 高亮（覆盖单元格淡底色，让整行突出）；行可点击弹共享K线 */
+      '#' + BOX + ' tr.r{cursor:pointer;transition:background .12s}' +
+      '#' + BOX + ' tbody tr.r:hover td,#' + BOX + ' tbody tr.r:hover{' +
+        'background:#27406e!important;color:#fff}' +
+      '#' + BOX + ' tbody tr.r:hover .inst{color:#fff!important}' +
+      /* 列表分区标题（交易列表 / 实时持仓列表） */
+      '#' + BOX + ' .ft-sec{margin:16px 0 8px;font-size:14.5px;color:#cfe0ff;display:flex;align-items:center;gap:10px;font-weight:800;' +
+        'border-left:4px solid #4f8cff;padding-left:10px}' +
+      '#' + BOX + ' .ft-sec-wrap{margin-top:4px}' +
       '#' + BOX + ' .inst{color:#7fb1ff;cursor:pointer;text-decoration:underline dotted}' +
       '#' + BOX + ' .ev{font-weight:700}' +
       '#' + BOX + ' .up{color:#ff6b7d;font-weight:600}#' + BOX + ' .dn{color:#31c99a;font-weight:600}#' + BOX + ' .flat{color:#8b94ad}' +
@@ -106,6 +114,7 @@
       '#' + BOX + ' .ai-mm ul{list-style:none;margin:3px 0 3px 14px;padding-left:10px;border-left:1px dashed #33507e}' +
       '#' + BOX + ' .ai-mm li{margin:3px 0}' +
       '#' + BOX + ' .ai-mm .root{color:#ffe0a0;font-weight:800}' +
+      '#' + BOX + ' .ai-ov{margin:10px 0 12px}' +
       '#' + BOX + ' .ai-metrics{width:100%;font-size:11.3px}' +
       '#' + BOX + ' .ai-metrics td{border-top:1px solid #1e2f4c;padding:4px 5px;text-align:left;white-space:normal}' +
       '#' + BOX + ' .ai-metrics td:last-child{text-align:right;color:#dbe8ff;font-weight:800}' +

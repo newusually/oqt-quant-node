@@ -111,6 +111,9 @@ function macdSchedTick() {
   const now = Date.now();
   const due = macdDueTfs(now);
   for (const { tf, bar } of due) {
+    /* ★买卖/加仓边界窗口：本根 15m K 线边界后开启 ENTRY_WINDOW_MS 的入场窗口，
+     *   窗口外 scan() 不再做信号驱动的买多/卖空/加仓（只平仓），节奏明确为每 15 分钟一次。 */
+    if (tf.id === '15m') entryWindowUntil = bar + CFG.ENTRY_WINDOW_MS;
     /* 剔除该周期上一轮未跑完的残留任务，避免跨K线积压 */
     macdJobs = macdJobs.filter(j => j.tf.id !== tf.id);
     macdSched[tf.id] = {

@@ -1,16 +1,17 @@
+  /* ===================== 交易明细表（★交易列表） ===================== */
   function renderRows(rows) {
     var tb = document.getElementById('ft-rows'); if (!tb) return;
     var flt = rows || [];
     if (tfFilter !== 'all') flt = flt.filter(function (r) { return r.tf === tfFilter; });
     if (evFilter !== 'all') flt = flt.filter(function (r) { return evKey(r) === evFilter || r.event === evFilter; });
     if (!flt.length) {
-      tb.innerHTML = '<tr><td colspan="10" class="empty">当前筛选无数据（可切回「全部周期 / 全部事件」）</td></tr>';
+      tb.innerHTML = '<tr><td colspan="11" class="empty">当前筛选无数据（可切回「全部周期 / 全部类型」）</td></tr>';
       return;
     }
     tb.innerHTML = flt.map(function (r) {
       var ev = EV[evKey(r)] || { label: r.event, color: '#8b9abc', sym: 'circle' };
       var dirCls = r.dir === '多' ? 'up' : (r.dir === '空' ? 'dn' : '');
-      return '<tr class="r">' +
+      return '<tr class="r" data-inst="' + esc(r.inst) + '">' +
         '<td>' + tf(r.ts) + '</td>' +
         '<td><span class="inst" data-inst="' + esc(r.inst) + '">' + esc(r.inst) + '</span></td>' +
         '<td>' + tfName(r.tf) + '</td>' +
@@ -19,11 +20,14 @@
         '<td>' + num(r.px, 6) + '</td>' +
         '<td>' + num(r.qty, 6) + '</td>' +
         '<td>' + num(r.cost, 6) + '</td>' +
-        '<td class="' + cls(r.unreal) + '">' + sgn(r.unreal, 6) + '</td>' +
+        '<td>' + num(r.entryPx, 6) + '</td>' +
+        '<td class="' + cls(r.unrealPct) + '">' + fmtPct(r.unrealPct) + '</td>' +
         '<td class="' + cls(r.netBp) + '">' + sgn(r.netBp, 6) + '</td>' +
       '</tr>';
     }).join('');
-    bindInstClicks(tb);
+    paintTable(tb.parentNode);            // 列头多彩 + 单元格淡色
+    bindInstClicks(tb);                   // 合约名点击
+    bindRowClicks(tb);                    // 整行点击弹共享K线
   }
 
   function renderPager(d) {
@@ -41,4 +45,32 @@
         activePage = pg; load();
       };
     });
+  }
+
+  /* ===================== 实时持仓列表（只显未平仓） ===================== */
+  function renderHolding(rows) {
+    var tb = document.getElementById('ft-hold-rows'); if (!tb) return;
+    if (!rows || !rows.length) {
+      tb.innerHTML = '<tr><td colspan="11" class="empty">当前无未平仓持仓</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(function (r) {
+      var dirCls = r.dir === '多' ? 'up' : 'dn';
+      return '<tr class="r" data-inst="' + esc(r.inst) + '">' +
+        '<td><span class="inst" data-inst="' + esc(r.inst) + '">' + esc(r.inst) + '</span></td>' +
+        '<td class="' + dirCls + '">' + esc(r.dir) + '</td>' +
+        '<td>' + tfName(r.tf) + '</td>' +
+        '<td>' + num(r.entryPx, 6) + '</td>' +
+        '<td>' + num(r.px, 6) + '</td>' +
+        '<td>' + num(r.avgPx, 6) + '</td>' +
+        '<td>' + num(r.totalQty, 6) + '</td>' +
+        '<td class="' + cls(r.unrealPct) + '">' + fmtPct(r.unrealPct) + '</td>' +
+        '<td class="' + cls(r.netUnreal) + '">' + sgn(r.netUnreal, 6) + '</td>' +
+        '<td>' + num(r.adds, 0) + '</td>' +
+        '<td style="text-align:left">' + dt(r.entryTs) + '</td>' +
+      '</tr>';
+    }).join('');
+    paintTable(tb.parentNode);
+    bindInstClicks(tb);
+    bindRowClicks(tb);
   }

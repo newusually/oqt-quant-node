@@ -70,11 +70,16 @@ function restoreOpen() {
  * ① 入场：MACD(12,26,60) 零轴翻转；同根 K 线槽已占用则不开仓；每笔 0.1 美金。
  * ② 加仓：满 1 小时 + 浮亏 > 总投入 1% + 当前 MACD 柱方向同向 + 同根 K 线槽空闲 → 0.1 美金。
  * ③ 平仓：整仓浮盈 > 总投入 10% 止盈；否则一直持有，不止损、不按时间平仓。
+ * ★节奏约束：买多/卖空/加仓只在每根 15m K 线边界后的 ENTRY_WINDOW_MS 窗口内执行（窗口外只平仓），
+ *   且平仓后同合约·同周期冷却 REOPEN_COOLDOWN_MS（1 根K线），彻底消除"每时每刻都在买卖"的观感。
  * 无限资金、无爆仓；数据自 2026-11-01 起永久保留。 */
 function scan() {
   if (!db) return;
   const now = Date.now();
   const feeRate = PYR.FEE_BP / 10000;
+  /* ★买卖/加仓边界窗口：仅窗口内允许信号驱动的买多/卖空/加仓；窗口外只做平仓判定。
+   *   这样所有买卖/加仓都明确发生在每 15 分钟一次，绝不会"每时每刻"触发。 */
+  const inWindow = entryWindowUntil > 0 && now <= entryWindowUntil;
 
   /* ---- 1) 遍历未平仓金字塔：满1小时+浮亏>1%+MACD柱方向同向加仓 / 浮盈>10%止盈平仓（不准按时间平仓）---- */
   for (const [pid, p] of pyramids) {
@@ -97,6 +102,7 @@ function scan() {
       recordPyrEvent(p, 'close', now, +exitPx.toFixed(6), +p.totalQty.toFixed(8),
         +p.totalCost.toFixed(6), +realizedGross.toFixed(6), +realizedNet.toFixed(6));
       pyrActive.delete(p.instId + '|' + p.tf + '|' + p.dir);
+      pyrCloseAt.set(p.instId + '|' + p.tf, now);   // ★平仓后同合约·同周期冷却 1 根K线，避免反复开仓
       pyramids.delete(pid);                        // 已平仓移出内存，pyr_open 残留由 persistOpen 清理
       openDirty = true;
       continue;
@@ -110,7 +116,7 @@ function scan() {
     const sigTf = PYR.TFS.find(t => t.id === p.tf) || PYR.TFS[0];
     const sigDir = pyrMacdDir(p.instId, sigTf);
     const sameDir = sigDir !== 0 && sigDir === p.dir;
-    if (loss > p.totalCost * PYR.ADD_LOSS_PCT / 100 &&
+    if (inWindow && loss > p.totalCost * PYR.ADD_LOSS_PCT / 100 &&
         sameDir &&
         (now - sinceTs) >= PYR.ADD_INTERVAL_MS &&
         !pyrBarTaken(p.instId, p.tf, now)) {
@@ -133,7 +139,8 @@ function scan() {
   }
 
   /* ---- 2) 新开仓：MACD 零轴翻转信号（★只 15m，买多+卖空都开）---- */
-  for (const inst of universe) {
+  /* ★只在边界窗口内执行：窗口外绝不新开仓，保证买卖节奏严格为每 15 分钟一次。 */
+  if (inWindow) for (const inst of universe) {
     if (isStableInst(inst) || isZeroVolInst(inst)) continue;
     const b = books.get(inst);
     if (!b || !b.bids.length || !b.asks.length) continue;
@@ -149,6 +156,8 @@ function scan() {
       if (!dir) continue;
       const key = inst + '|' + tf.id + '|' + dir;
       if (pyrActive.has(key)) continue;           // 同一合约·周期·方向只允许一个金字塔
+      /* ★平仓后冷却：同合约·同周期 1 根K线内不再开仓，避免反复开仓/平仓抖动 */
+      if (now - (pyrCloseAt.get(inst + '|' + tf.id) || 0) < CFG.REOPEN_COOLDOWN_MS) continue;
       if (pyrBarTaken(inst, tf.id, now)) continue; // ★同根K线只允许一次买多/卖空/加仓
       const entryPx = dir > 0 ? ask : bid;
       const initQty = PYR.ENTRY_USD / entryPx;

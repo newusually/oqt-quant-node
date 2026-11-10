@@ -76,4 +76,9 @@ function restoreBarUsed() {
 }
 let startedAt = 0, endAt = 0, lastSettleAt = 0, settleSeq = 0;
 let totalTrades = 0;
+/* ★买卖/加仓边界窗口：由 macdSchedTick 在每根 15m K 线边界后设定，
+ *   窗口内才允许信号驱动的买多/卖空/加仓；窗口外只做平仓判定（修复"每时每刻买卖"）。 */
+let entryWindowUntil = 0;
+/* 平仓后同合约·同周期冷却时间戳（inst|tf -> ts），避免反复开仓抖动。 */
+const pyrCloseAt = new Map();
 

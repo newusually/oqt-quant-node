@@ -31,7 +31,7 @@
     if (!r) {
       el.innerHTML = '<div class="ai-box"><div class="ai-hd"><h4>🤖 AI 策略分析 · WorkBuddy Hy4</h4>' +
         '<span class="ai-badge warn">等待首次分析</span></div>' +
-        '<div class="ai-empty">每天 00:00 由服务器 CodeBuddy / Hy4 自动分析全部交易，生成逐步推理、思维导图、图表与改进结论。' +
+        '<div class="ai-empty">每小时由服务器 CodeBuddy / Hy4 自动分析全部交易（累计复盘），生成逐步推理、思维导图、图表与改进结论。' +
         (d && d.error ? '<br><span class="hl-red">' + esc(d.error) + '</span>' : '') + '</div></div>';
       return;
     }
@@ -46,10 +46,11 @@
 
     var h = '<div class="ai-box"><div class="ai-hd">' +
       '<h4>🤖 AI 策略分析 · WorkBuddy Hy4</h4>' +
-      '<span class="ai-badge">每日 00:00 自动更新</span>' +
+      '<span class="ai-badge">每小时自动更新 · 累计复盘</span>' +
       '<span class="ai-meta">🕐 ' + esc(when) + (r.engine ? ' · ' + esc(r.engine) : '') + '</span></div>' +
       '<div class="ai-verdict"><b>结论 · </b>' + fmt(r.verdict || '（无结论文本）') + '</div>' +
       (hls.length ? '<div class="ai-hls">' + hls.map(hlCard).join('') + '</div>' : '') +
+      '<div id="ft-ai-overview" class="ai-ov"></div>' +
       aiChartsHtml(r.charts) +
       '<div class="ai-grid">' +
       /* 左：思维导图 + 逐步分析 */
@@ -90,8 +91,32 @@
       (d.rejected && d.rejected.length ? ' ｜ <span class="hl-red">已拒绝参数：' + esc(d.rejected.join('、')) + '</span>' : '') +
       '</div></div>';
     el.innerHTML = h;
+    renderAiOverview(lastSummary);
     aiMountCharts(r.charts);
     bindInstClicks(el);
+  }
+  /* ★AI 交易总览表：用实时 flowtrack 统计展示关键累计数字（好看表格，列头多彩 + 单元格淡色）。
+   *   随主面板每 3 秒轻量刷新（不重建整个 AI 面板，避免图表面板闪烁）。 */
+  function renderAiOverview(summary) {
+    var el = document.getElementById('ft-ai-overview'); if (!el) return;
+    if (!summary) { el.innerHTML = ''; return; }
+    var sm = summary;
+    var ec = sm.eventCounts || {};
+    var rows = [
+      ['总模拟盈利 (USD)', sgn(sm.totalProfitUSD, 4), sm.totalProfitUSD >= 0 ? 'up' : 'dn'],
+      ['未平仓投入 (仓位USD)', num(sm.positionUSD, 4), 'flat'],
+      ['持仓市值 (持有USD)', num(sm.holdingUSD, 4), 'flat'],
+      ['未平仓浮亏 (亏损USD)', sgn(-sm.lossUSD, 4), sm.lossUSD > 0 ? 'dn' : 'flat'],
+      ['开仓次数', num((ec.buy || 0) + (ec.sell || 0), 0), 'flat'],
+      ['加仓次数', num(ec.add || 0, 0), 'flat'],
+      ['平仓次数', num(ec.close || 0, 0), 'flat'],
+      ['未平仓金字塔', num(sm.openCount, 0), 'flat']
+    ];
+    el.innerHTML = '<table class="ai-metrics"><thead><tr><th>指标</th><th>数值</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        return '<tr><td>' + esc(x[0]) + '</td><td class="' + x[2] + '">' + x[1] + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    paintTable(el.querySelector('table'));
   }
   function loadAI() {
     fetch('/api/okx/ai_strategy?v=' + Date.now()).then(function (r) { return r.json(); }).then(function (d) {

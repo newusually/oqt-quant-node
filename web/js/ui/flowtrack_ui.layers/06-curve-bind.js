@@ -1,84 +1,47 @@
-  function bindCurve() {
-    cv = document.getElementById('ftc-cv');
-    cvTip = document.getElementById('ftc-tip');
-    if (!cv || curveBound) return;
-    curveBound = true;
-    cvCtx = cv.getContext('2d');
-    curveTools();
+  /* ===================== 曲线视图装配（盈利曲线 + 实时持仓曲线） ===================== */
+  var closeView = null, equityView = null;
 
-    /* 浮层固定右上角且可交互：鼠标移到浮层上时保持内容，合约名可点击弹共享K线 */
-    var tipHover = false;
-    if (cvTip) {
-      cvTip.addEventListener('mouseenter', function () { tipHover = true; });
-      cvTip.addEventListener('mouseleave', function () {
-        tipHover = false;
-        cvTip.style.display = 'none';
-        curveHover = -1; drawCurve();
-      });
-      cvTip.addEventListener('click', function (e) {
-        var a = e.target;
-        while (a && a !== cvTip && !a.getAttribute('data-inst')) a = a.parentNode;
-        if (a && a !== cvTip) openSharedKline(a.getAttribute('data-inst'));
-      });
-    }
+  function closeTip(r) {
+    var up = r.profit >= 0;
+    var inst = r.inst ? '<span class="ftc-inst" data-inst="' + esc(r.inst) + '" title="点击弹出共享K线">' + esc(r.inst) + ' ↗</span>' : '—';
+    return '时间：<b>' + esc(dt(r.t)) + '</b><br>' +
+      '合约：' + inst + (r.dir ? ' <span style="color:#8b9abc">(' + esc(r.dir) + ')</span>' : '') + '<br>' +
+      '本笔净盈利：<b style="color:' + (up ? '#ff6b7d' : '#31c99a') + '">' + esc(sgn(r.profit, 6)) + ' $</b><br>' +
+      '累计净USD：<b>' + esc(sgn(r.net, 6)) + ' $</b><br>' +
+      '止盈目标价：<b>' + esc(num(r.tpPx, 6)) + '</b>' +
+      (r.tpUsd != null ? ' <span style="color:#8b9abc">(目标 +' + esc(num(r.tpUsd, 6)) + '$)</span>' : '') + '<br>' +
+      '实际平仓价：<b>' + esc(num(r.exitPx, 6)) + '</b>' +
+      (r.avgPx != null ? ' <span style="color:#8b9abc">/ 均价 ' + esc(num(r.avgPx, 6)) + '</span>' : '') +
+      '<div style="margin-top:4px;color:#7f92b8;font-size:10.5px">点击合约名 → 共享K线组件</div>';
+  }
+  function equityTip(r) {
+    var up = r.net >= 0;
+    return '时间：<b>' + esc(dt(r.t)) + '</b><br>' +
+      '未平仓数：<b>' + esc(r.n) + '</b><br>' +
+      '实时净浮盈USD：<b style="color:' + (up ? '#ff6b7d' : '#31c99a') + '">' + esc(sgn(r.net, 6)) + ' $</b><br>' +
+      '持仓市值：<b>' + esc(num(r.holdingUSD, 6)) + ' $</b><br>' +
+      '投入中：<b>' + esc(num(r.positionUSD, 6)) + ' $</b>';
+  }
 
-    cv.addEventListener('mousedown', function (e) {
-      if (e.button !== 0) return;
-      curveDrag = { x: e.clientX, off: curveState.off | 0 };
-      cv.style.cursor = 'grabbing'; e.preventDefault();
+  function ensureViews() {
+    if (closeView) return;
+    closeView = new CurveView({
+      canvasId: 'ftc-cv', tipId: 'ftc-tip', toolsId: 'ftc-tools', infoId: 'ftc-info',
+      color: '#3d7bff', area: 'rgba(61,123,255,.12)', yLabel: '累计净USD',
+      emptyText: '暂无平仓数据（浮盈 >10% 止盈后生成逐笔曲线点）', onTip: closeTip
     });
-    global.addEventListener('mousemove', function (e) {
-      if (tipHover) return;              // ★鼠标在浮层上：保持当前曲线点，允许点击合约名
-      if (curveDrag) {
-        var stp = (cv.__geo && cv.__geo.step) || 6;
-        var dx = Math.round((e.clientX - curveDrag.x) / stp);
-        var no = cclamp(curveDrag.off + dx, curveMinOff(), curveMaxOff());
-        if (no !== curveState.off) { curveState.off = no; drawCurve(); }
-      }
-      var r = cv.getBoundingClientRect();
-      var mx = e.clientX - r.left, my = e.clientY - r.top;
-      if (mx >= 0 && mx <= r.width && my >= 0 && my <= r.height) {
-        var nh = curveIndexAt(mx);
-        if (nh !== curveHover) { curveHover = nh; drawCurve(); }
-        showCurveTip(mx, my);
-      } else if (curveHover !== -1) {
-        curveHover = -1; drawCurve();
-        if (cvTip) cvTip.style.display = 'none';
-      }
+    equityView = new CurveView({
+      canvasId: 'ftc-eq-cv', tipId: 'ftc-eq-tip', toolsId: 'ftc-eq-tools', infoId: 'ftc-eq-info',
+      color: '#31c99a', area: 'rgba(49,201,154,.12)', yLabel: '实时净浮盈USD',
+      emptyText: '暂无持仓采样（有未平仓金字塔后每 30 秒生成）', onTip: equityTip
     });
-    global.addEventListener('mouseup', function () {
-      if (curveDrag) { curveDrag = null; cv.style.cursor = 'grab'; }
-    });
-    cv.addEventListener('mouseleave', function () {
-      if (tipHover) return;              // ★移到浮层上不清空，交给浮层自身 mouseleave
-      if (curveHover !== -1) { curveHover = -1; drawCurve(); }
-      if (cvTip) cvTip.style.display = 'none';
-    });
-    cv.addEventListener('wheel', function (e) {
-      e.preventDefault();
-      if (e.shiftKey) curvePan(e.deltaY > 0 ? -10 : 10);
-      else curveZoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, e.clientX);   // ★以光标数据点为圆心
-    }, { passive: false });
-    cv.addEventListener('dblclick', function () { curveReset(); });
-    cv.addEventListener('keydown', function (e) {
-      var k = e.key;
-      if (k === 'ArrowLeft') { curvePan(+curveStep()); e.preventDefault(); }
-      else if (k === 'ArrowRight') { curvePan(-curveStep()); e.preventDefault(); }
-      else if (k === '+' || k === '=') { curveZoom(1 / 1.25); e.preventDefault(); }
-      else if (k === '-' || k === '_') { curveZoom(1.25); e.preventDefault(); }
-      else if (k === 'Home') { curveLatest(); e.preventDefault(); }
-    });
-    global.addEventListener('resize', function () { drawCurve(); });
-    if (global.ResizeObserver) {
-      try { new ResizeObserver(function () { drawCurve(); }).observe(cv.parentElement); } catch (e) { }
-    }
   }
 
   function renderChart(d) {
-    var el = document.getElementById('ft-chart'); if (!el) return;
-    var series = ((d && d.curve) || []).slice();
-    series.sort(function (a, b) { return (+a.t) - (+b.t); });
-    lastCurve = series;
-    if (!cv) bindCurve();      // 首次绑定（工具按钮 + 交互）
-    drawCurve();               // ★只重绘，绝不重置 curveState → 3 秒轮询不打断用户拖动
+    if (!d) return;
+    ensureViews();
+    var closeSeries = ((d.curve) || []).slice().sort(function (a, b) { return (+a.t) - (+b.t); });
+    closeView.render(closeSeries);
+    var eqSeries = ((d.equity) || []).slice().sort(function (a, b) { return (+a.t) - (+b.t); });
+    equityView.render(eqSeries);
   }

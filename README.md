@@ -12,7 +12,7 @@
 ![db](https://img.shields.io/badge/storage-SQLite%2FWAL-003B57)
 ![ui](https://img.shields.io/badge/frontend-Canvas%20%2B%20SSE-f7df1e)
 ![cycle](https://img.shields.io/badge/%E4%BA%A4%E6%98%93%E5%91%A8%E6%9C%9F-15m%20only-d33847)
-![build](https://img.shields.io/badge/BUILD-20261110e-blueviolet)
+![build](https://img.shields.io/badge/BUILD-20261110f-blueviolet)
 
 </div>
 
@@ -74,7 +74,7 @@ graph TB
         KC["KChart<br/>Canvas 引擎 · 五态标记"]
     end
 
-    subgraph TASK["每日 00:00 · systemd timer"]
+    subgraph TASK["每小时整点 · systemd timer（累计复盘）"]
         SNAP["交易快照生成"]
         CB["CodeBuddy CLI<br/>codebuddy -p --model hy4"]
         GUARD["受控脚本<br/>校验 / 备份 / 回滚"]
@@ -223,7 +223,7 @@ hist = (DIF - DEA) * 2
 
 ## 6. 前端总览面板
 
-入口 `/web/index.html`，构建戳 `window.__BUILD = '20261110e'`，旧页面检测到版本变化会自动强刷一次（`sessionStorage` 防循环）。
+入口 `/web/index.html`，构建戳 `window.__BUILD = '20261110f'`，旧页面检测到版本变化会自动强刷一次（`sessionStorage` 防循环）。
 
 | 区块 | 内容 |
 |---|---|
@@ -270,7 +270,7 @@ hist = (DIF - DEA) * 2
 
 ### 8.1 数据契约
 
-`data/ai_strategy.json` 由服务器每日 00:00 回写：
+`data/ai_strategy.json` 由服务器每小时整点回写（累计复盘）：
 
 ```json
 {
@@ -311,7 +311,7 @@ hist = (DIF - DEA) * 2
 ### 8.3 每日任务架构（服务器侧）
 
 ```text
-systemd timer  每日 00:00 (Asia/Shanghai)
+systemd timer  每小时整点 (Asia/Shanghai)
   → 生成交易库快照（近 N 日逐笔、胜率、回撤、参数敏感性）
   → codebuddy -p --model <hy4 / 免费优先模型池> --output-format json < prompt
   → 校验结构化 JSON（字段完整 · 参数在白名单 · 数值有限）
@@ -330,9 +330,9 @@ systemd timer  每日 00:00 (Asia/Shanghai)
 | `scripts/ai_snapshot.js` | 只读生成交易库快照（事件分布、已实现净利、胜率、回撤、未平仓投入、曲线） |
 | `scripts/ai_daily.sh` | 快照 → 模型池逐个尝试 `codebuddy -p --output-format json` → 校验落盘 → 日志 |
 | `scripts/ai_apply.js` | 字段完整性 / 白名单 / 数值范围校验，原子写 `data/ai_strategy.json` |
-| `deploy/oqt-ai-daily.{service,timer}` → `/etc/systemd/system/` | `OnCalendar=*-*-* 00:00:00`、CST(UTC+8)、`Persistent=true`；单元源纳入版本控制 |
+| `deploy/oqt-ai-daily.{service,timer}` → `/etc/systemd/system/` | `OnCalendar=*-*-* *:00:00`（每小时整点）、CST(UTC+8)、`Persistent=true`；单元源纳入版本控制 |
 
-> 部署状态：引擎接口、白名单热加载、前端面板、三个脚本与 systemd 单元**均已上线**；CodeBuddy Code CLI `v2.182.0`（`/usr/bin/codebuddy`）已在服务器完成授权。`oqt-ai-daily.timer` 为 `enabled` + `active`，下次触发 `2026-11-11 00:00 CST`，`Persistent=true` 保证漏跑补执行。2026-11-10 11:54–11:59 做过真实 systemd 实跑，`ExecMainStatus=0`，`hy4-preview` 分析成功落盘，生效参数 `15 / 30 / 3600000`、拒绝项为空。
+> 部署状态：引擎接口、白名单热加载、前端面板、三个脚本与 systemd 单元**均已上线**；CodeBuddy Code CLI `v2.182.0`（`/usr/bin/codebuddy`）已在服务器完成授权。`oqt-ai-daily.timer` 为 `enabled` + `active`，**每小时整点触发**（累计复盘），`Persistent=true` 保证漏跑补执行。2026-11-10 11:54–11:59 做过真实 systemd 实跑，`ExecMainStatus=0`，`hy4-preview` 分析成功落盘，生效参数 `15 / 30 / 3600000`、拒绝项为空。
 >
 > 候选模型池由单元的 `AI_MODELS` 提供：`hy4-preview → hy3 → deepseek-v4.1-flash → default-model`，单个模型失败或超时（420s）自动切下一个；`TimeoutStartSec=1800` 覆盖四轮。**`Environment` 值含空格时必须用引号包裹整个赋值**（`Environment="AI_MODELS=a b c"`），否则 systemd 按空格切开只保留第一个候选，并报 `Invalid environment assignment`。
 
@@ -360,7 +360,7 @@ oqt-quant-node/
 │           ├── 10-query.js           统计 / 分页明细 / 持仓查询 / stats
 │           └── 11-start.js           SSE / 定时器装配 / 导出
 ├── web/
-│   ├── index.html                   入口 + 构建戳 20261110e
+│   ├── index.html                   入口 + 构建戳 20261110f
 │   ├── js/ui/flowtrack.js           ★1.2 KB 前端组合器入口
 │   ├── js/ui/flowtrack_ui.layers/   ★10 层共享函数作用域
 │   │   ├── 01-state.js              常量 / 选项卡 / 事件映射 / 格式化
@@ -378,11 +378,11 @@ oqt-quant-node/
 │   └── js/trade-signals.js          五态买卖标记
 ├── scripts/
 │   ├── ai_snapshot.js               每日交易快照（只读）
-│   ├── ai_daily.sh                  每日分析编排 + 模型池 fallback
+│   ├── ai_daily.sh                  每小时分析编排（累计复盘）+ 模型池 fallback
 │   └── ai_apply.js                  AI 输出校验 + 原子落盘
 ├── deploy/
-│   ├── oqt-ai-daily.service         每日分析 oneshot 单元（User=root）
-│   └── oqt-ai-daily.timer           每日 00:00 CST 触发
+│   ├── oqt-ai-daily.service         每小时分析 oneshot 单元（User=root）
+│   └── oqt-ai-daily.timer           每小时整点触发（累计复盘）
 └── data/
     ├── flowtrack/flowtrack.sqlite    独立模拟交易库（WAL）
     └── ai_strategy.json              AI 分析结论（引擎 30s 热加载）
@@ -432,20 +432,21 @@ Environment=PORT=80
 ### 部署顺序
 
 ```bash
-# 1) 上传（从开发机到生产服务器）
-scp  flowtrack.js  modules/okx/engines/flowtrack.js
-scp  flowtrack.layers/*.js  modules/okx/engines/flowtrack.layers/
-scp  api_index.js  modules/okx/api/index.js
-scp  flowtrack_ui.js  web/js/ui/flowtrack.js
-scp  flowtrack_ui.layers/*.js  web/js/ui/flowtrack_ui.layers/
-scp  index.html  web/index.html
-scp  README.md  README.md
+# 在仓库根 /home/ubuntu/oqt-quant-node 执行（_pull 为本次交付暂存目录）
+# 1) 同步运行时文件
+cp _pull/flowtrack.js                        modules/okx/engines/flowtrack.js
+cp _pull/flowtrack.layers/*.js               modules/okx/engines/flowtrack.layers/
+cp _pull/flowtrack_ui.js                     web/js/ui/flowtrack.js
+cp _pull/flowtrack_ui.layers/*.js            web/js/ui/flowtrack_ui.layers/
+cp _pull/index.html                          web/index.html
+cp _pull/README.md                           README.md
+cp _pull/ai_daily.sh                         scripts/ai_daily.sh          # 本次改了「每小时累计复盘」prompt
 
-# 2) systemd 单元（仅首次 / 配置变更时）
-sudo cp deploy/oqt-ai-daily.{service,timer} /etc/systemd/system/
+# 2) systemd 单元（配置变更：调度已改每小时整点）
+sudo cp _pull/oqt-ai-daily.{service,timer}   /etc/systemd/system/
 sudo systemctl daemon-reload
 systemd-analyze verify /etc/systemd/system/oqt-ai-daily.service
-sudo systemctl enable --now oqt-ai-daily.timer
+sudo systemctl restart oqt-ai-daily.timer                              # 切到每小时整点
 systemctl list-timers oqt-ai-daily.timer --no-pager
 
 # 3) 静态校验（不改数据）
@@ -453,7 +454,7 @@ node --check modules/okx/engines/flowtrack.js
 for f in modules/okx/engines/flowtrack.layers/*.js; do node --check "$f"; done
 for f in web/js/ui/flowtrack.js web/js/ui/flowtrack_ui.layers/*.js; do node --check "$f"; done
 
-# 4) 重启
+# 4) 重启服务
 sudo systemctl restart oqt-quant-node
 sudo systemctl is-active oqt-quant-node
 journalctl -u oqt-quant-node -n 60 --no-pager
@@ -462,6 +463,9 @@ journalctl -u oqt-quant-node -n 60 --no-pager
 curl -s 'http://127.0.0.1/api/okx/flowtrack'   | head -c 500
 curl -s 'http://127.0.0.1/api/okx/ai_strategy' | head -c 500
 curl -s 'http://127.0.0.1/api/okx/pyr_all?page=1' | head -c 300
+
+# 6) 单提交（仓库仅留最新版，按惯例 force）
+git add -A && git commit -m "feat(flowtrack): 20261110f 交易列表列改造+实时持仓列表+持仓曲线+每小时AI累计复盘" && git push --force
 ```
 
 ### 验证清单
@@ -469,14 +473,18 @@ curl -s 'http://127.0.0.1/api/okx/pyr_all?page=1' | head -c 300
 - [ ] 启动日志出现 `只 15m` / `每笔 0.1 美金` / `永久保留` / `无自动删除/VACUUM`
 - [ ] `/api/okx/flowtrack` 的 `cfg` 与第五版规则一致
 - [ ] `curl -sI /web/js/ui/flowtrack_ui.layers/01-state.js` 返回 200（静态子目录已放行）
-- [ ] 前端构建戳 = `20261110e`，页面自动强刷后 AI 面板、曲线、明细均渲染；两个持仓面板已移除
+- [ ] 前端构建戳 = `20261110f`，页面自动强刷后 AI 面板、曲线、明细均渲染；两个持仓面板已移除
 - [ ] AI 面板出现 4 张图（累计净曲线 / 事件饼图 / Top 合约柱状 / 关键金额柱状）、红色加粗重点卡片、时间带「(北京时间)」
 - [ ] `node scripts/verify_ui_layers.js` 输出 `PASS 10/10`（从组合器源码解析真实 URL 校验，不手工拼路径）
 - [ ] 真实 headless Chrome 打开线上总览：`__BUILD` 一致、`#ft-ai` 内 4 张图均渲染出 canvas 或 SVG、`.hl-red` 红色重点可见、明细表 15 行、两个持仓面板文案与容器均不存在
+- [ ] 交易列表列头为多彩背景+文字、单元格淡色、行 hover 高亮、整行点击弹共享 K 线；含「开仓价格」「浮盈浮亏%」列、无「浮盈/已实现$」列
+- [ ] 交易列表上方「实时持仓列表」仅显示未平仓（有持仓时≥1 行、无持仓时空态 colspan=11）
+- [ ] 第二图框「实时持仓曲线」随每 30s 采样刷新，展示持仓期间实时净浮盈（含亏损）
+- [ ] AI 面板出现累计复盘总览表（多彩列头）+ 图表；badge 标注「每小时自动更新 · 累计复盘」
 - [ ] 曲线 hover 出现合约 / 盈利 / 止盈价；点击合约名弹出共享 K 线且合约一致
 - [ ] 浏览器控制台无 `/web/bt/qa_bounds.js` 404
 - [ ] `git status --porcelain` 为空，服务 `active`
-- [ ] `systemctl is-enabled / is-active oqt-ai-daily.timer` 为 `enabled` / `active`，下次触发次日 00:00 CST
+- [ ] `systemctl is-enabled / is-active oqt-ai-daily.timer` 为 `enabled` / `active`，每小时整点触发
 - [ ] `systemctl show oqt-ai-daily.service -p Environment` 中 `AI_MODELS` 含全部 4 个候选
 - [ ] `journalctl -u oqt-ai-daily.service` 与 `logs/ai_daily.log` 显示成功落盘，`ExecMainStatus=0`
 
@@ -498,6 +506,9 @@ curl -s 'http://127.0.0.1/api/okx/pyr_all?page=1' | head -c 300
 | `CFG.MACD_MIN_PREV` | `20` | 翻转前连续反向柱最少根数 |
 | `CFG.MACD_BARS` | `100` | 每次拉取 K 线根数 |
 | `CFG.SCAN_MS` | `5000` | 策略主循环间隔 |
+| `CFG.EQUITY_MS` | `30000` | 实时持仓曲线采样间隔（每 30s 落一次全部未平仓净浮盈） |
+| `CFG.ENTRY_WINDOW_MS` | `120000` | 每根 15m K 线边界后开仓/加仓窗口（窗口外只平仓，杜绝「每时每刻买卖」） |
+| `CFG.REOPEN_COOLDOWN_MS` | `900000` | 平仓后同合约·同周期冷却（1 根K线），避免反复开仓抖动 |
 | `CFG.MACD_CONCURRENCY / TICK_MS` | `5 / 400` | REST 限速 |
 | `CFG.KEEP_FROM_TS` | `2026-11-01T00:00:00+08:00` | 数据保留起点（展示用） |
 | `CFG.KEEP_FOREVER` | `true` | 永久保留，不注册任何清理定时器 |
@@ -524,6 +535,7 @@ curl -s 'http://127.0.0.1/api/okx/pyr_all?page=1' | head -c 300
 | 第五版 r3 `20261110c` | 2026-11-10 | 止盈 15%→**10%**；加仓浮亏 30%→**1%** 且恢复「同方向 MACD 买多/卖空信号」硬条件；AI 全链路改北京时间、报告精简并用 `**…**` 红色加粗标重点；AI 面板重做（4 张图：累计净曲线 / 事件饼图 / Top 合约柱状 / 关键金额柱状，ECharts + SVG 降级）；前端拆到 10 层 |
 | 第五版 r4 `20261110d` | 2026-11-10 | 修复加仓信号口径：原复用「零轴翻转入场信号」导致条件过苛、线上加仓 0 次，改为读取**当前 15m MACD 柱方向同向**（买多仓柱>0 / 卖空仓柱<0，保留 1 小时间隔与同根 K 线槽）；交易数据清零重算；真实 headless Chrome 验证线上渲染（ECharts 4 图 + 红色重点 + 北京时间）；明确 50 KB 口径只约束手写交付代码，数据资产不拆 |
 | 第五版 r5 `20261110e` | 2026-11-10 | 删除历史遗留 404：`web/index.html` 不再引用从未入仓的 `/web/bt/qa_bounds.js`（`qa-marks.js` 本就有 `ANG_MIN=10` 兜底，行为不变），并修正指向不存在文件的注释；按用户要求移除两个未平仓持仓面板（LeadK 的「📊 所有合约持仓」与金字塔总览的「当前未平仓金字塔」），DOM / 请求 / 状态 / 选项卡 / 分页 / CSS 全链路清理，后端 `pyr_positions` 接口保留；修正 r3 版本戳与 LeadK 旧加仓文案 |
+| 第五版 r6 `20261110f` | 2026-11-10 | 交易列表新增「开仓价格」「浮盈浮亏百分比」列、删除「浮盈/已实现$」；买卖/加仓严格按 15m K 线边界后 `ENTRY_WINDOW_MS=2min` 窗口执行、平仓后同合约冷却 1 根K线（修复「每时每刻都在买卖」）；上方新增「实时持仓列表」（仅未平仓）；「实时盈利曲线」改「实时持仓曲线」（每 30s 采样全部未平仓净浮盈，落 `pyr_equity`）；全表格列头多彩背景+文字、单元格淡色、行 hover 高亮、整行点击弹共享 K 线；「事件列表」改名「交易列表」；AI 面板新增累计复盘总览表 + 图表，调度由每日零点改为**每小时整点累计复盘**（`OnCalendar=*-*-* *:00:00`）；构建戳 bump `20261110f` |
 | 第四版 | 2026-11-09 | 入场改 `MACD(12,26,60)` 零轴翻转（前 20 根反向柱）；删除旧 1H 诊断 REST 轮转；按 K 线边界定时运行 |
 | 第三版 | 2026-11-08 | 止盈/加仓阈值 15%；同根 K 线单事件槽；K 线五态标记、共享悬浮窗、圆心缩放、右侧留白 |
 | 第二版 | 2026-11-07 | 马丁格尔金字塔替换旧订单流策略；四类事件、总结面板、盈利曲线 |

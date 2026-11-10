@@ -4,6 +4,10 @@
       if (!d || d.ok === false) { var u = document.getElementById('ft-upd'); if (u) u.textContent = '接口异常: ' + ((d && d.err) || ''); return; }
       var u = document.getElementById('ft-upd'); if (u) u.textContent = '更新 ' + new Date().toLocaleTimeString();
       renderCards(d); renderChart(d);
+      lastSummary = d.summary || null; lastOpen = d.open || [];
+      renderHolding(lastOpen);
+      /* AI 总览表用实时统计刷新（不重建整个 AI 面板，避免图表面板闪烁） */
+      if (document.getElementById('ft-ai-overview')) renderAiOverview(lastSummary);
     }).catch(function (e) { var u = document.getElementById('ft-upd'); if (u) u.textContent = '刷新失败: ' + e.message; });
 
     var aurl = '/api/okx/pyr_all?page=' + activePage +

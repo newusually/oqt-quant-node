@@ -75,6 +75,9 @@ async function start() {
   setInterval(flushPx, CFG.FLUSH_MS);
   setInterval(pollDeep, CFG.DEEP_POLL_MS);
   setInterval(settle, CFG.SETTLE_MS);
+  /* ★实时持仓曲线采样：每 30 秒落一次当前所有未平仓金字塔的实时净浮盈 USD */
+  try { recordEquity(); } catch (e) { }
+  setInterval(recordEquity, CFG.EQUITY_MS);
   /* 兜底心跳：无新成交时每 10 秒推一帧 */
   setInterval(broadcast, 10000);
   /* 永久保留：仅每 30 分钟做一次 WAL checkpoint，不丢任何数据。 */
@@ -93,7 +96,7 @@ module.exports = {
   start, stats, settle, subscribe,
   jumpHistory, jumpInsts, jumpTradesByInst,   // 保留旧路由名（委托到金字塔）
   pyrSummary: pyrSummaryCalc, pyrInsts, pyrTrades, pyrMarks, pyrAll, pyrPositions,
-  aiStrategy, aiRead, curve,                  // AI 策略面板 / 曲线逐笔数据
+  aiStrategy, aiRead, curve, equityCurve, recordEquity,   // AI 策略面板 / 曲线数据
   STABLE_BASES
 };
 

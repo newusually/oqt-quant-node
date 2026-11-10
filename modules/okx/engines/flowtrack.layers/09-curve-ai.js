@@ -28,6 +28,23 @@ function curve() {
   });
 }
 
+/* ============================== 实时持仓曲线（逐点采样） ==============================
+ * 每点 = 某一采样时刻全部未平仓金字塔的【实时净浮盈 USD】（含亏损与盈利）。
+ * 用于前端「实时持仓曲线」，展示持仓期间的真实盈亏走势，而非仅平仓曲线。 */
+function equityCurve() {
+  if (!db) return [];
+  const rows = db.prepare(
+    `SELECT ts, n_open, net_unreal, holding_usd, position_usd
+     FROM pyr_equity ORDER BY ts ASC, id ASC`).all();
+  return rows.map(r => ({
+    t: r.ts, ts: r.ts, n: r.n_open || 0,
+    net: +(+r.net_unreal || 0).toFixed(6),
+    gross: +(+r.net_unreal || 0).toFixed(6),
+    holdingUSD: +(+r.holding_usd || 0).toFixed(6),
+    positionUSD: +(+r.position_usd || 0).toFixed(6)
+  }));
+}
+
 /* ============================== AI 策略面板（CodeBuddy / Hy4 每日零点回写） ==============================
  * 文件：data/ai_strategy.json（与 data/flowtrack 同级）。由服务器每日 00:00 的 CodeBuddy CLI 生成。
  * 结构：{ generatedAt, verdict, steps[], mindmap{}, metrics[], curve[], conclusions[],

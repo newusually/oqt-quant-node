@@ -41,6 +41,28 @@ function flush() {
   }
 }
 
+/* ============================== 实时持仓曲线采样 ==============================
+ * 每 30 秒落一次全部未平仓金字塔的实时净浮盈 USD（聚合曲线，永久保留）。
+ * 展示持仓期间的实时亏损/盈利，而非仅平仓曲线。 */
+function recordEquity() {
+  if (!db) return;
+  const now = Date.now();
+  let net = 0, hold = 0, pos = 0, n = 0;
+  for (const [, p] of pyramids) {
+    if (p.closed) continue;
+    const b = books.get(p.instId);
+    const px = b && b.bids.length && b.asks.length ? (p.dir > 0 ? +b.bids[0][0] : +b.asks[0][0]) : p.entryPx;
+    const avg = p.totalCost / p.totalQty;
+    const gU = p.dir * (px - avg) * p.totalQty;
+    const nU = gU - p.totalFee;
+    net += nU; hold += p.totalQty * px; pos += p.totalCost; n++;
+  }
+  try {
+    db.prepare('INSERT INTO pyr_equity(ts,n_open,net_unreal,holding_usd,position_usd) VALUES(?,?,?,?,?)')
+      .run(now, n, +net.toFixed(6), +hold.toFixed(6), +pos.toFixed(6));
+  } catch (e) { console.error('[pyr] 持仓曲线采样失败:', e.message); }
+}
+
 /* ============================== 统计（全部由 SQL 聚合） ============================== */
 function agg(where, args) {
   const sql = `SELECT COUNT(*) n,
