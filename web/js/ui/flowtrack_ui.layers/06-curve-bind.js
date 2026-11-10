@@ -35,6 +35,7 @@
       color: '#31c99a', area: 'rgba(49,201,154,.12)', yLabel: '实时净浮盈USD',
       emptyText: '暂无持仓采样（有未平仓金字塔后每 30 秒生成）', onTip: equityTip
     });
+    closeView.peer = equityView; equityView.peer = closeView;
   }
 
   function renderChart(d) {

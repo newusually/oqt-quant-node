@@ -36,9 +36,9 @@
       '</div>' +
       '<h4 style="margin:14px 0 6px;color:#8fe0c0;font-size:12.5px">实时持仓曲线（持仓期间实时净浮盈 USD · 含亏损 / 盈利，每 30 秒采样）· 与上方同步拖拽 / 缩放</h4>' +
       '<div id="ft-eq-chart" class="chart">' +
-      '<div class="ftc-tools" id="ft-eq-tools"></div>' +
-      '<canvas id="ft-eq-cv" class="ftc-cv" tabindex="0"></canvas>' +
-      '<div class="ftc-tip" id="ft-eq-tip"></div>' +
+      '<div class="ftc-tools" id="ftc-eq-tools"></div>' +
+      '<canvas id="ftc-eq-cv" class="ftc-cv" tabindex="0"></canvas>' +
+      '<div class="ftc-tip" id="ftc-eq-tip"></div>' +
       '</div></div>';
     return true;
   }

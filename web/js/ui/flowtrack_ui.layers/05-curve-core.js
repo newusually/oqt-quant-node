@@ -12,6 +12,7 @@
     this.state = { off: 0, vis: this.DEF_VIS, anchorX: null };
     this.cv = null; this.ctx = null; this.tip = null; this.bound = false;
     this.hover = -1; this.drag = null;
+    this.peer = null;
     this.color = this.opts.color || '#3d7bff';
     this.area = this.opts.area || 'rgba(61,123,255,.12)';
     this.yLabel = this.opts.yLabel || '累计净USD';
@@ -22,7 +23,7 @@
   CurveView.prototype.minOff = function () { return -this.RIGHT_PAD; };
   CurveView.prototype.maxOff = function () { return Math.max(0, this.data.length - (this.state.vis | 0)); };
   CurveView.prototype.stepN = function () { return Math.max(3, Math.round((this.state.vis | 0) / 2)); };
-  CurveView.prototype.pan = function (n) { this.state.off = cclamp((this.state.off | 0) + n, this.minOff(), this.maxOff()); this.draw(); };
+  CurveView.prototype.pan = function (n) { this.state.off = cclamp((this.state.off | 0) + n, this.minOff(), this.maxOff()); this.draw(); this.syncPeer(); };
   CurveView.prototype.zoom = function (f, x) {
     var total = this.data.length, cur = this.state.vis | 0;
     var nv = cclamp(Math.round(cur * f), 5, Math.max(5, total)); if (nv === cur) return;
@@ -37,11 +38,21 @@
     var ns = bi - Math.round(ratio * nv);
     this.state.vis = nv;
     this.state.off = cclamp(total - (ns + nv), this.minOff(), Math.max(0, total - nv));
-    this.draw();
+    this.draw(); this.syncPeer();
   };
-  CurveView.prototype.reset = function () { this.state.off = 0; this.state.vis = this.DEF_VIS; this.draw(); };
-  CurveView.prototype.latest = function () { this.state.off = 0; this.draw(); };
-  CurveView.prototype.showAll = function () { this.state.vis = Math.max(5, this.data.length); this.state.off = 0; this.draw(); };
+  CurveView.prototype.reset = function () { this.state.off = 0; this.state.vis = this.DEF_VIS; this.draw(); this.syncPeer(); };
+  CurveView.prototype.latest = function () { this.state.off = 0; this.draw(); this.syncPeer(); };
+  CurveView.prototype.showAll = function () { this.state.vis = Math.max(5, this.data.length); this.state.off = 0; this.draw(); this.syncPeer(); };
+
+  /* 与联动图（peer）同步视口：拖拽/缩放一张，另一张保持相同可见点数与右端锚定偏移。 */
+  CurveView.prototype.syncPeer = function () {
+    var p = this.peer;
+    if (!p || !p.cv || !p.data || !p.data.length) return;
+    var vis = cclamp(this.state.vis | 0, 5, Math.max(5, p.data.length));
+    var off = cclamp(this.state.off | 0, p.minOff(), Math.max(0, p.data.length - vis));
+    p.state.vis = vis; p.state.off = off;
+    p.draw();
+  };
 
   CurveView.prototype.tools = function () {
     var box = document.getElementById(this.opts.toolsId);
@@ -221,7 +232,7 @@
         var stp = (self.cv.__geo && self.cv.__geo.step) || 6;
         var dx = Math.round((e.clientX - self.drag.x) / stp);
         var no = cclamp(self.drag.off + dx, self.minOff(), self.maxOff());
-        if (no !== self.state.off) { self.state.off = no; self.draw(); }
+        if (no !== self.state.off) { self.state.off = no; self.draw(); self.syncPeer(); }
       }
       var r = self.cv.getBoundingClientRect();
       var mx = e.clientX - r.left, my = e.clientY - r.top;
