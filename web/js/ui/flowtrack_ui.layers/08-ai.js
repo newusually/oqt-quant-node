@@ -1,7 +1,7 @@
   /* ===================== AI 策略面板（每天零点自动分析回写） ===================== */
   var aiTimer = null, lastAiSig = '';
   var AI_TAGS = { danger: '🔴 高风险', warn: '🟠 需关注', ok: '🟢 正常', info: '🔵 建议' };
-  var aiTradesPage = 1, aiTradesPer = 10;
+  var aiTradesPage = 1, aiTradesPer = 10, aiInstPage = 1, aiInstPer = 20;
 
   function fmt(s) {
     return esc(String(s == null ? '' : s))
@@ -54,13 +54,22 @@
     arr.sort(function (a, b) { return b.net - a.net; });
     return arr;
   }
-  function renderInstSummary(trades) {
+  /* 分合约净USD · 胜率：分页渲染（262 合约，默认 20/页），避免一次性撑爆 */
+  function renderInstSummaryInto(trades) {
+    var wrap = document.getElementById('ft-ai-inst');
+    if (!wrap) return;
     var arr = aggByInst(trades);
-    if (!arr.length) return '<div class="ai-empty">暂无交易</div>';
+    if (!arr.length) { wrap.innerHTML = '<div class="ai-empty">暂无交易</div>'; return; }
+    var per = aiInstPer, total = arr.length;
+    var pages = Math.max(1, Math.ceil(total / per));
+    if (aiInstPage > pages) aiInstPage = pages;
+    if (aiInstPage < 1) aiInstPage = 1;
+    var start = (aiInstPage - 1) * per;
+    var slice = arr.slice(start, start + per);
     var tot = { n: 0, win: 0, loss: 0, open: 0, net: 0 };
     arr.forEach(function (m) { tot.n += m.n; tot.win += m.win; tot.loss += m.loss; tot.open += m.open; tot.net += m.net; });
     var totWr = (tot.win + tot.loss) ? (tot.win / (tot.win + tot.loss) * 100) : null;
-    var rows = arr.map(function (m) {
+    var rows = slice.map(function (m) {
       var wr = m.winRate == null ? '—' : num(m.winRate, 1) + '%';
       return '<tr>' +
         '<td class="inst">' + esc(m.inst) + '</td>' +
@@ -70,13 +79,31 @@
         '<td>' + (m.open ? num(m.open, 0) + ' 持仓' : '—') + '</td>' +
       '</tr>';
     }).join('');
-    return '<div class="ai-sub">分合约净USD · 胜率（由全部交易实时聚合）</div>' +
-      '<table class="ai-inst-sum"><thead><tr><th>合约</th><th>笔数</th><th>胜/负 · 胜率</th><th>净USD</th><th>持仓</th></tr></thead><tbody>' +
-      rows +
+    var table = '<div class="ai-trades"><table class="ai-inst-tbl"><thead><tr><th>合约</th><th>笔数</th><th>胜/负 · 胜率</th><th>净USD</th><th>持仓</th></tr></thead><tbody>' + rows +
       '<tr class="ai-sum-row"><td>合计</td><td>' + num(tot.n, 0) + '</td>' +
       '<td class="' + (totWr >= 50 ? 'up' : 'dn') + '">' + num(tot.win, 0) + '胜/' + num(tot.loss, 0) + '负 · ' + (totWr == null ? '—' : num(totWr, 1) + '%') + '</td>' +
       '<td class="' + (tot.net >= 0 ? 'up' : 'dn') + '">' + sgn(tot.net, 4) + '</td><td>' + (tot.open ? num(tot.open, 0) + ' 持仓' : '—') + '</td></tr>' +
-      '</tbody></table>';
+      '</tbody></table></div>';
+    var perOpts = [20, 50, 100].map(function (p) {
+      return '<option value="' + p + '"' + (p === per ? ' selected' : '') + '>' + p + '/页</option>';
+    }).join('');
+    var pager = '<div class="pager">' +
+      '<button class="pg' + (aiInstPage <= 1 ? ' dis' : '') + '" data-pg="' + (aiInstPage - 1) + '"' + (aiInstPage <= 1 ? ' disabled' : '') + '>« 上一页</button>' +
+      '<span class="pg-info">第 ' + aiInstPage + ' / ' + pages + ' 页 · 共 ' + total + ' 合约</span>' +
+      '<button class="pg' + (aiInstPage >= pages ? ' dis' : '') + '" data-pg="' + (aiInstPage + 1) + '"' + (aiInstPage >= pages ? ' disabled' : '') + '>下一页 »</button>' +
+      '<select class="pg-per">' + perOpts + '</select>' +
+      '</div>';
+    wrap.innerHTML = table + pager;
+    wrap.querySelectorAll('button.pg').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = +b.getAttribute('data-pg');
+        if (p >= 1 && p <= pages) { aiInstPage = p; renderInstSummaryInto(trades); }
+      });
+    });
+    wrap.querySelectorAll('select.pg-per').forEach(function (s) {
+      s.addEventListener('change', function () { aiInstPer = +s.value; aiInstPage = 1; renderInstSummaryInto(trades); });
+    });
+    if (typeof paintTable === 'function') { try { paintTable(wrap.querySelector('.ai-trades table')); } catch (e) { } }
   }
   /* 全量交易明细：分页渲染（默认 30/页，可选 20/50/100），避免 200+ 笔一次性撑爆 */
   function renderTradesTableInto(trades) {
@@ -249,9 +276,11 @@
       '<h5 class="ai-gap">✅ 盈利归因（全部盈利笔 · 为什么赚）</h5>' +
       renderAnaList(r.profitAnalysis, '暂无盈利归因') +
       '</div>' +
-      /* 中：全部交易明细报表（分合约净USD/胜率 + 分页全量） + 回测全量汇总 */
-      '<div class="ai-col"><h5>📋 全部交易明细（报表 · 全量）</h5>' +
-      renderInstSummary(r.trades) +
+      /* 中：分合约净USD/胜率（分页）+ 全部交易明细（逐笔·全量·分页）+ 回测全量汇总 */
+      '<div class="ai-col">' +
+      '<h5>📊 分合约净USD · 胜率（报表 · 分页）</h5>' +
+      '<div id="ft-ai-inst" class="ai-inst-wrap"></div>' +
+      '<h5 class="ai-gap">📋 全部交易明细（逐笔 · 全量 · 分页）</h5>' +
       '<div id="ft-ai-trades" class="ai-trades-wrap"></div>' +
       renderOpenMonitor(r.trades) +
       '<h5 class="ai-gap">🧪 回测全量汇总</h5>' +
@@ -281,6 +310,7 @@
       (d.rejected && d.rejected.length ? ' ｜ <span class="hl-red">已拒绝参数：' + esc(d.rejected.join('、')) + '</span>' : '') +
       '</div></div>';
     el.innerHTML = h;
+    renderInstSummaryInto(r.trades);
     renderTradesTableInto(r.trades);
     renderAiOverview(lastSummary);
     aiMountCharts(r.charts);
