@@ -328,6 +328,36 @@ function stats() {
         patterns: ['孔雀开屏', '倒孔雀开屏', '多头排列', '空头排列', 'V反转', '倒V反转', 'W双底突破', 'M头破位', '放量', 'MACD加速'],
         multTable: { 2: 2, 3: 2.5, 4: 3, 5: 4, 6: 5 }
       },
+      /* ★风控与资金效率（2026-11-11）：离场五判 + 并发上限 + 弱仓淘汰 */
+      risk: {
+        stopLossPct: PYR.STOP_LOSS_PCT,
+        stopLossMinHoldMin: PYR.STOP_LOSS_MIN_HOLD_MS / 60000,
+        timeStopHours: PYR.TIME_STOP_MS / 3600000,
+        timeStopLossPct: PYR.TIME_STOP_LOSS_PCT,
+        trailArmPct: PYR.TRAIL_ARM_PCT,
+        trailBackPct: PYR.TRAIL_BACK_PCT,
+        fastFail: {
+          enable: PYR.FAST_FAIL_ENABLE,
+          observeMin: PYR.FAST_FAIL_MS / 60000,
+          lossPct: PYR.FAST_FAIL_LOSS_PCT,
+          maxScore: PYR.FAST_FAIL_MAX_SCORE
+        },
+        maxOpenPos: PYR.MAX_OPEN_POS,
+        maxOpenHard: PYR.MAX_OPEN_HARD,
+        prunePerScan: PYR.PRUNE_PER_SCAN,
+        pruneMinHoldMin: PYR.PRUNE_MIN_HOLD_MS / 60000,
+        pruneMinLossPct: PYR.PRUNE_MIN_LOSS_PCT,
+        exitRule: '离场五判（按优先级）：①止盈 浮盈≥' + PYR.TP_PCT + '%（强形态单 ' + PYR.TP_PCT_STRONG + '%）' +
+          ' ②移动止盈 峰值≥' + PYR.TRAIL_ARM_PCT + '% 回落至≤' + PYR.TRAIL_BACK_PCT + '% 锁利' +
+          ' ③硬止损 浮亏≥' + PYR.STOP_LOSS_PCT + '%（持仓≥' + (PYR.STOP_LOSS_MIN_HOLD_MS / 60000) + '分钟）' +
+          ' ④快速试错 观察 ' + (PYR.FAST_FAIL_MS / 60000) + ' 分钟后浮亏≥' + PYR.FAST_FAIL_LOSS_PCT +
+          '% 且无形态支撑（形态分≤' + PYR.FAST_FAIL_MAX_SCORE + '）→ 认错换仓' +
+          ' ⑤时间止损 持仓≥' + (PYR.TIME_STOP_MS / 3600000) + 'h 且浮亏≥' + PYR.TIME_STOP_LOSS_PCT + '% → 回收僵死资金',
+        maxOpenRule: '并发未平仓金字塔上限 ' + PYR.MAX_OPEN_POS + ' 个（硬上限 ' + PYR.MAX_OPEN_HARD +
+          '）；超出时每次扫描最多淘汰 ' + PYR.PRUNE_PER_SCAN + ' 个「浮亏最深、持仓≥' +
+          (PYR.PRUNE_MIN_HOLD_MS / 60000) + '分钟、浮亏≥' + PYR.PRUNE_MIN_LOSS_PCT +
+          '%、非强形态」的弱仓，把资金让给新强信号'
+      },
       entryRule: 'MACD(12,26,60) 柱：当前>0 且之前连续≥20根<0 → 买多；当前<0 且之前连续≥20根>0 → 卖空（★只 15m，按K线边界每15分钟定时判定）',
       keepForever: CFG.KEEP_FOREVER, keepFromTs: CFG.KEEP_FROM_TS,
       keepFrom: new Date(CFG.KEEP_FROM_TS).toISOString(),

@@ -99,7 +99,12 @@ function aiStrategy() {
     locked: AI_LOCKED,
     effective: {
       tpPct: PYR.TP_PCT, addLossPct: PYR.ADD_LOSS_PCT, addIntervalMs: PYR.ADD_INTERVAL_MS,
-      entryUsd: PYR.ENTRY_USD, addUsd: PYR.ADD_USD, tfs: PYR.TFS.map(t => t.id)
+      entryUsd: PYR.ENTRY_USD, addUsd: PYR.ADD_USD, tfs: PYR.TFS.map(t => t.id),
+      /* 风控回显（2026-11-11）：只读展示，不参与 AI 参数白名单校验 */
+      stopLossPct: PYR.STOP_LOSS_PCT, trailArmPct: PYR.TRAIL_ARM_PCT, trailBackPct: PYR.TRAIL_BACK_PCT,
+      timeStopHours: PYR.TIME_STOP_MS / 3600000, timeStopLossPct: PYR.TIME_STOP_LOSS_PCT,
+      fastFailMin: PYR.FAST_FAIL_MS / 60000, fastFailLossPct: PYR.FAST_FAIL_LOSS_PCT,
+      maxOpenPos: PYR.MAX_OPEN_POS
     },
     error: c.error || null
   };

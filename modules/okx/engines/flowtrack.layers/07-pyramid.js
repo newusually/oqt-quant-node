@@ -56,7 +56,7 @@ function restoreOpen() {
         entryTs: r.entry_ts, entryPx: r.entry_px, initQty: initQty,
         totalQty: r.total_qty, totalCost: r.total_cost, totalFee: 0,
         adds: r.adds || 0, lastAddTs: r.last_add_ts || r.entry_ts, closed: false,
-        addsStrong: r.adds_strong || 0, strong: !!r.strong
+        addsStrong: r.adds_strong || 0, strong: !!r.strong, peakPct: 0
       };
       pyramids.set(p.pid, p);
       pyrActive.set(p.instId + '|' + p.tf + '|' + p.dir, p.pid);
@@ -69,6 +69,56 @@ function restoreOpen() {
   return n;
 }
 
+/* ============================== 离场判定（纯函数，可单测） ==============================
+ * 五道离场，按优先级命中即返：
+ *   ① 止盈      整仓浮盈 ≥ tpPct(5%，强形态单 8%)
+ *   ② 移动止盈  峰值浮盈 ≥ TRAIL_ARM_PCT(4%) 且当前回落至 ≤ TRAIL_BACK_PCT(2%) → 锁利
+ *   ③ 硬止损    浮亏 ≥ STOP_LOSS_PCT(4%)（持仓 ≥ 1 根K线）
+ *   ④ 快速试错  观察期满(1 根K线) 且 浮亏 ≥ 2.5% 且 形态分 ≤ 1（无形态支撑）→ 认错换仓
+ *   ⑤ 时间止损  持仓 ≥ 24h 且 浮亏 ≥ 1% → 回收僵死资金
+ * getPatScore 为惰性回调：只有走到④时才调用，避免对全部仓位做形态重计算。
+ * 返回 { reason, gross, avg, pnlPct, holdMs } 或 null（继续持有）。 */
+function pyrExitCheck(p, px, now, getPatScore) {
+  if (!p || p.closed) return null;
+  if (!(p.totalQty > 0) || !(p.totalCost > 0)) return null;
+  const avg = p.totalCost / p.totalQty;
+  if (!(avg > 0) || !(px > 0)) return null;
+  const gross = p.dir * (px - avg) * p.totalQty;
+  const pnlPct = gross / p.totalCost * 100;
+  const holdMs = now - p.entryTs;
+  /* 峰值浮盈跟踪（只升不降） */
+  if (!(p.peakPct >= pnlPct)) p.peakPct = pnlPct;
+  const tpPct = p.strong ? PYR.TP_PCT_STRONG : PYR.TP_PCT;
+  const out = (reason) => ({ reason: reason, gross: gross, avg: avg, pnlPct: pnlPct, holdMs: holdMs });
+
+  if (gross > p.totalCost * tpPct / 100) {
+    return out('止盈平仓：浮盈 ' + pnlPct.toFixed(2) + '% ≥ ' + tpPct + '%' +
+      (p.strong ? '（强形态单·放宽止盈）' : '') +
+      '，加仓 ' + (p.adds || 0) + ' 次' + (p.addsStrong ? '（强信号 ' + p.addsStrong + ' 次）' : ''));
+  }
+  if ((p.peakPct || 0) >= PYR.TRAIL_ARM_PCT && pnlPct <= PYR.TRAIL_BACK_PCT) {
+    return out('移动止盈：最高浮盈 ' + p.peakPct.toFixed(2) + '% 回落至 ' + pnlPct.toFixed(2) +
+      '%（跟踪线 ' + PYR.TRAIL_BACK_PCT + '%）→ 锁利离场，加仓 ' + (p.adds || 0) + ' 次');
+  }
+  if (holdMs >= PYR.STOP_LOSS_MIN_HOLD_MS && pnlPct <= -PYR.STOP_LOSS_PCT) {
+    return out('硬止损：浮亏 ' + pnlPct.toFixed(2) + '% ≤ -' + PYR.STOP_LOSS_PCT +
+      '%（持仓 ' + (holdMs / 3600000).toFixed(1) + 'h）→ 认错离场释放资金');
+  }
+  if (PYR.FAST_FAIL_ENABLE && holdMs >= PYR.FAST_FAIL_MS && pnlPct <= -PYR.FAST_FAIL_LOSS_PCT) {
+    const sc = typeof getPatScore === 'function' ? getPatScore() : 99;
+    if (sc <= (PYR.FAST_FAIL_MAX_SCORE || 1)) {
+      return out('快速试错：入场 ' + (holdMs / 60000).toFixed(0) + ' 分钟后浮亏 ' +
+        pnlPct.toFixed(2) + '% 且无形态支撑（形态分 ' + sc + ' ≤ ' +
+        (PYR.FAST_FAIL_MAX_SCORE || 1) + '）→ 认错换仓');
+    }
+  }
+  if (holdMs >= PYR.TIME_STOP_MS && pnlPct <= -PYR.TIME_STOP_LOSS_PCT) {
+    return out('时间止损：持仓 ' + (holdMs / 3600000).toFixed(1) + 'h ≥ ' +
+      (PYR.TIME_STOP_MS / 3600000) + 'h 且浮亏 ' + pnlPct.toFixed(2) + '% → 回收僵死资金');
+  }
+  return null;
+}
+
 /* ============================== 金字塔主循环（第五版） ==============================
  * 每个合约·方向只允许一个金字塔（pyrActive 防重），只 15m。
  * ① 入场：MACD(12,26,60) 零轴翻转；同根 K 线槽已占用则不开仓；每笔 0.1 美金。
@@ -77,7 +127,10 @@ function restoreOpen() {
  *      且与持仓同向 → 加仓 0.1 美金 × 倍数(2/2.5/3/4/5)，间隔 1 根K线，允许浮盈加仓；
  *      上限：单金字塔总投入 ≤ 2.5U、强加仓 ≤ 6 次、总加仓 ≤ 18 次、浮盈达止盈 60% 停加。
  *    · 基础加仓：满 1 小时 + 浮亏 > 0 + 零轴翻转同向 → 固定 0.1 美金（原口径保留）。
- * ③ 平仓：整仓浮盈 > 总投入 5% 止盈（强形态单 8%）；否则一直持有，不止损、不按时间平仓。
+ * ③ 平仓（四道离场，2026-11-11 补风控）：①止盈 浮盈≥5%（强单 8%）②移动止盈 峰值≥4% 回落至 2% 锁利
+ *    ③硬止损 浮亏≥6%（持仓≥1根K线）④时间止损 持仓≥12h 且浮亏≥1%。原有"永不止损"已废止：
+ *    实测 589 仓中 54% 躺着浮亏、资金周转停滞，是"赚得慢"的主因。
+ * ④ 并发上限：未平仓金字塔 ≤ MAX_OPEN_POS（120），超出时淘汰浮亏最深且非强形态的仓位让位。
  * ★节奏约束：买多/卖空/加仓只在每根 15m K 线边界后的 ENTRY_WINDOW_MS 窗口内执行（窗口外只平仓），
  *   且平仓后同合约·同周期冷却 REOPEN_COOLDOWN_MS（1 根K线），彻底消除"每时每刻都在买卖"的观感。
  * 无限资金、无爆仓；数据自 2026-11-01 起永久保留。 */
@@ -89,7 +142,7 @@ function scan() {
    *   这样所有买卖/加仓都明确发生在每 15 分钟一次，绝不会"每时每刻"触发。 */
   const inWindow = entryWindowUntil > 0 && now <= entryWindowUntil;
 
-  /* ---- 1) 遍历未平仓金字塔：满1小时+浮亏>0%+买卖信号(零轴翻转)同向加仓 / 浮盈>5%止盈平仓（不准按时间平仓）---- */
+  /* ---- 1) 遍历未平仓金字塔：离场四判（止盈/移动止盈/硬止损/时间止损）+ 两级加仓 ---- */
   for (const [pid, p] of pyramids) {
     if (p.closed) continue;
     const b = books.get(p.instId);
@@ -98,22 +151,22 @@ function scan() {
     const px = p.dir > 0 ? bid : ask;            // 多:用买价估值/平仓；空:用卖价
     const avg = p.totalCost / p.totalQty;         // 成本均价（不含费）
     const grossUnreal = p.dir * (px - avg) * p.totalQty;
+    const pnlPct = p.totalCost > 0 ? (grossUnreal / p.totalCost * 100) : 0;
+    const holdMs = now - p.entryTs;
 
-    /* ★止盈：整仓浮盈 > 总投入的 5%（强形态单放宽到 TP_PCT_STRONG=8%，让盈利单跑得更远） */
-    const tpPct = p.strong ? PYR.TP_PCT_STRONG : PYR.TP_PCT;
-    if (grossUnreal > p.totalCost * tpPct / 100) {
+    /* ★离场判定：调用纯函数 pyrExitCheck（五道：止盈/移动止盈/硬止损/快速试错/时间止损）。
+     *   形态分惰性求值，只有进入「快速试错」分支才计算，避免全量重计算。 */
+    const sigTf0 = PYR.TFS.find(t => t.id === p.tf) || PYR.TFS[0];
+    const ex = pyrExitCheck(p, px, now, () => pyrPattern(p.instId, sigTf0, p.dir).score);
+    if (ex) {
       const exitPx = p.dir > 0 ? bid : ask;
       const exitNotional = p.totalQty * exitPx;
       const exitFee = exitNotional * feeRate;
-      const realizedGross = p.dir * (exitPx - avg) * p.totalQty;
+      const realizedGross = p.dir * (exitPx - ex.avg) * p.totalQty;
       const realizedNet = realizedGross - p.totalFee - exitFee;
       p.closed = true;
-      const pnlPct = p.totalCost > 0 ? (grossUnreal / p.totalCost * 100) : 0;
       recordPyrEvent(p, 'close', now, +exitPx.toFixed(6), +p.totalQty.toFixed(8),
-        +p.totalCost.toFixed(6), +realizedGross.toFixed(6), +realizedNet.toFixed(6),
-        '止盈平仓：浮盈 ' + pnlPct.toFixed(2) + '% ≥ ' + tpPct + '%' +
-        (p.strong ? '（强形态单·放宽止盈）' : '') +
-        '，加仓 ' + (p.adds || 0) + ' 次' + (p.addsStrong ? '（强信号 ' + p.addsStrong + ' 次）' : ''));
+        +p.totalCost.toFixed(6), +realizedGross.toFixed(6), +realizedNet.toFixed(6), ex.reason);
       pyrActive.delete(p.instId + '|' + p.tf + '|' + p.dir);
       pyrCloseAt.set(p.instId + '|' + p.tf, now);   // ★平仓后同合约·同周期冷却 1 根K线，避免反复开仓
       pyramids.delete(pid);                        // 已平仓移出内存，pyr_open 残留由 persistOpen 清理
@@ -135,7 +188,8 @@ function scan() {
     const macdDir = pyrMacdDir(p.instId, sigTf);      // 当前 15m MACD 柱方向（加仓用，不要求翻转）
     const pat = pyrPattern(p.instId, sigTf, p.dir);   // ★形态强度评分（孔雀开屏/V/W/M…）
     const strong = pat.score >= (PYR.STRONG_MIN_SCORE || 2) && pat.mult > 1;
-    const tpUsd = p.totalCost * tpPct / 100;
+    const tpPctAdd = p.strong ? PYR.TP_PCT_STRONG : PYR.TP_PCT;   // 加仓临近止盈判断用（与离场同口径）
+    const tpUsd = p.totalCost * tpPctAdd / 100;
     const profitRatio = tpUsd > 0 ? grossUnreal / tpUsd : 0;
     const barFree = !pyrBarTaken(p.instId, p.tf, now);
     const expoLeft = (PYR.MAX_EXPO_USD || 999) - p.totalCost;
@@ -186,9 +240,69 @@ function scan() {
     }
   }
 
+  /* ---- 1.5) 并发上限：超出 MAX_OPEN_POS 时淘汰最弱仓位，把资金腾给新强信号 ----
+   * 用户 2026-11-11：实测 589 个仓位 / 100U 总投入（均值 0.17U），54% 浮亏 →
+   *   资金被摊薄，绝对收益永远上不去。改为「定量并发 + 弱仓让位」：
+   *   只在窗口内、超出上限时淘汰，每次最多 PRUNE_PER_SCAN 个，避免集中平仓冲击。
+   *   淘汰优先级：浮亏最深 > 持仓最久；强形态仓（strong 且有强加仓）优先保留。 */
+  const maxOpen = PYR.MAX_OPEN_POS || 150;
+  if (inWindow && pyramids.size >= maxOpen) {
+    /* ★限流：scan 每 5 秒一次，开仓窗口 2 分钟 → 同一窗口内会扫描约 24 次。
+     *   必须按窗口配额（PRUNE_PER_WINDOW）封顶，否则会在一个窗口内平掉上百个仓位。 */
+    if (pyrPruneWin !== entryWindowUntil) { pyrPruneWin = entryWindowUntil; pyrPruneCnt = 0; }
+    const quotaLeft = (PYR.PRUNE_PER_WINDOW || 8) - pyrPruneCnt;
+    const need = Math.min(Math.min(PYR.PRUNE_PER_SCAN || 4, quotaLeft),
+                          pyramids.size - maxOpen + 1);
+    if (need > 0) {
+      const cands = [];
+      for (const [pid, p] of pyramids) {
+        if (p.closed) continue;
+        const b = books.get(p.instId);
+        if (!b || !b.bids.length || !b.asks.length) continue;
+        const bid = +b.bids[0][0], ask = +b.asks[0][0];
+        if (!(bid > 0) || !(ask > 0)) continue;
+        const px = p.dir > 0 ? bid : ask;
+        const avg = p.totalCost / p.totalQty;
+        if (!(avg > 0)) continue;
+        const pnlPct = p.dir * (px - avg) / avg * 100;
+        const holdMs = now - p.entryTs;
+        if (holdMs < (PYR.PRUNE_MIN_HOLD_MS || 3600000)) continue;      // 不砍刚开的
+        if (pnlPct > -(PYR.PRUNE_MIN_LOSS_PCT || 1)) continue;          // 只砍明显浮亏的；浮盈仓永不淘汰
+        if (p.strong && (p.addsStrong || 0) > 0) continue;              // 强形态仓优先保留
+        cands.push({ pid: pid, p: p, pnlPct: pnlPct, bid: bid, ask: ask, avg: avg });
+      }
+      cands.sort((a, b) => a.pnlPct - b.pnlPct);                        // 浮亏最深的先让位
+      let pruned = 0;
+      for (let i = 0; i < cands.length && pruned < need; i++) {
+        const c = cands[i], p = c.p;
+        const exitPx = p.dir > 0 ? c.bid : c.ask;
+        const exitNotional = p.totalQty * exitPx;
+        const exitFee = exitNotional * feeRate;
+        const realizedGross = p.dir * (exitPx - c.avg) * p.totalQty;
+        const realizedNet = realizedGross - p.totalFee - exitFee;
+        p.closed = true;
+        recordPyrEvent(p, 'close', now, +exitPx.toFixed(6), +p.totalQty.toFixed(8),
+          +p.totalCost.toFixed(6), +realizedGross.toFixed(6), +realizedNet.toFixed(6),
+          '弱仓让位：浮亏 ' + c.pnlPct.toFixed(2) + '%（持仓 ' + ((now - p.entryTs) / 3600000).toFixed(1) +
+          'h，加仓 ' + (p.adds || 0) + ' 次）→ 并发已满 ' + pyramids.size + '/' + maxOpen + '，让位给新强信号');
+        pyrActive.delete(p.instId + '|' + p.tf + '|' + p.dir);
+        pyrCloseAt.set(p.instId + '|' + p.tf, now);
+        pyramids.delete(c.pid);
+        openDirty = true;
+        pruned++;
+      }
+      if (pruned > 0) {
+        pyrPruneCnt += pruned;
+        console.log('[pyr] 弱仓让位 ' + pruned + ' 个（本窗口累计 ' + pyrPruneCnt + '/' +
+          (PYR.PRUNE_PER_WINDOW || 8) + '），当前并发 ' + pyramids.size + '/' + maxOpen);
+      }
+    }
+  }
+
   /* ---- 2) 新开仓：MACD 零轴翻转信号（★只 15m，买多+卖空都开）---- */
   /* ★只在边界窗口内执行：窗口外绝不新开仓，保证买卖节奏严格为每 15 分钟一次。 */
   if (inWindow) for (const inst of universe) {
+    if (pyramids.size >= (PYR.MAX_OPEN_HARD || 200)) break;   // 硬上限兜底，防止无界扩张
     if (isStableInst(inst) || isZeroVolInst(inst)) continue;
     const b = books.get(inst);
     if (!b || !b.bids.length || !b.asks.length) continue;
@@ -218,7 +332,7 @@ function scan() {
         entryTs: now, entryPx, initQty,
         totalQty: initQty, totalCost: PYR.ENTRY_USD, totalFee: fee0,
         adds: 0, addsStrong: 0, lastAddTs: now, closed: false,
-        strong: pat0.score >= 3
+        strong: pat0.score >= 3, peakPct: 0
       };
       pyramids.set(pid, p);
       pyrActive.set(key, pid);

@@ -81,4 +81,9 @@ let totalTrades = 0;
 let entryWindowUntil = 0;
 /* 平仓后同合约·同周期冷却时间戳（inst|tf -> ts），避免反复开仓抖动。 */
 const pyrCloseAt = new Map();
+/* ★弱仓淘汰限流（2026-11-11）：scan 每 5 秒一次、开仓窗口 2 分钟（约 24 次扫描），
+ *   若每轮都淘汰会把上百个仓位在同一个窗口内一次性平掉。
+ *   pyrPruneWin 记录本批淘汰所属窗口标识；pyrPruneCnt 记录该窗口已淘汰数量，达到配额即停。 */
+let pyrPruneWin = 0;
+let pyrPruneCnt = 0;
 

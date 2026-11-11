@@ -649,6 +649,12 @@
       ' ｜ 每笔 <b>' + esc(eff.entryUsd) + '$</b> · 加仓 <b>' + esc(eff.addUsd) + '$</b> · 周期 <b>' + esc((eff.tfs || []).join(',')) + '</b>' +
       ' ｜ 当前生效：<span class="hl-warn">止盈 ' + esc(eff.tpPct) + '%</span> / <span class="hl-warn">加仓浮亏 ' + esc(eff.addLossPct) + '%</span> / 间隔 ' + esc(Math.round((eff.addIntervalMs || 0) / 60000)) + ' 分钟' +
       ' ｜ 加仓需<b>买卖信号(零轴翻转)同向</b>' +
+      (eff && eff.stopLossPct != null ?
+        ' ｜ <span class="hl-warn">风控</span>：硬止损 -' + esc(eff.stopLossPct) + '%' +
+        ' · 移动止盈 ' + esc(eff.trailArmPct) + '→' + esc(eff.trailBackPct) + '%' +
+        ' · 快速试错 ' + esc(eff.fastFailMin) + 'min/' + esc(eff.fastFailLossPct) + '%' +
+        ' · 时间止损 ' + esc(eff.timeStopHours) + 'h' +
+        ' · 并发上限 ' + esc(eff.maxOpenPos) : '') +
       (d.rejected && d.rejected.length ? ' ｜ <span class="hl-red">已拒绝参数：' + esc(d.rejected.join('、')) + '</span>' : '') +
       '</div></div>';
     el.innerHTML = h;

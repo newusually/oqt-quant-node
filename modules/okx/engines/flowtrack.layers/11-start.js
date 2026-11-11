@@ -59,7 +59,9 @@ async function start() {
   console.log(`[ft] MACD(${CFG.MACD_FAST},${CFG.MACD_SLOW},${CFG.MACD_SIGNAL}) 定时刷新: ${macdQueue.length} 个合约；` +
     `★只 15m，每15分钟(:00/:15/:30/:45) 按K线边界跑一次全市场（约 ${estSec} 秒）`);
   console.log(`[ft] 数据保留：自 ${new Date(CFG.KEEP_FROM_TS).toISOString()} 起【永久保留】，无自动删除/VACUUM`);
-  console.log(`[ft] 交易规则：买多/卖空 每笔 ${PYR.ENTRY_USD}U；加仓两级=①强信号(孔雀开屏/V反转/W双底/M头/放量/MACD加速) ${PYR.ADD_USD}U×2~5倍 间隔1根K线 可浮盈加(上限 ${PYR.ADD_STRONG_MAX}次/总投入${PYR.MAX_EXPO_USD}U) ②浮亏加仓 满1小时 每笔 ${PYR.ADD_USD}U；止盈 ${PYR.TP_PCT}%(强形态单 ${PYR.TP_PCT_STRONG}%)`);
+  console.log(`[ft] 交易规则：买多/卖空 每笔 ${PYR.ENTRY_USD}U；加仓两级=①强信号(孔雀开屏/V反转/W双底/M头/放量/MACD加速) ${PYR.ADD_USD}U×2~5倍 间隔1根K线 可浮盈加(上限 ${PYR.ADD_STRONG_MAX}次/总投入${PYR.MAX_EXPO_USD}U) ②浮亏加仓 满1小时 每笔 ${PYR.ADD_USD}U`);
+  console.log(`[ft] 离场五判：①止盈 ${PYR.TP_PCT}%(强单${PYR.TP_PCT_STRONG}%) ②移动止盈 峰值${PYR.TRAIL_ARM_PCT}%回落至${PYR.TRAIL_BACK_PCT}% ③硬止损 -${PYR.STOP_LOSS_PCT}% ④快速试错 ${PYR.FAST_FAIL_MS / 60000}分钟后浮亏${PYR.FAST_FAIL_LOSS_PCT}%且无形态 ⑤时间止损 ${PYR.TIME_STOP_MS / 3600000}h且浮亏${PYR.TIME_STOP_LOSS_PCT}%`);
+  console.log(`[ft] 资金效率：并发上限 ${PYR.MAX_OPEN_POS} 个(硬顶${PYR.MAX_OPEN_HARD})，超出时每窗口最多淘汰 ${PYR.PRUNE_PER_WINDOW} 个浮亏弱仓让位`);
 
   /* AI 策略文件热加载：启动读一次，之后每 30 秒检查 mtime */
   aiRead(true);
