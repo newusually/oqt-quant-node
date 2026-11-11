@@ -278,8 +278,11 @@ function pyrPattern(inst, tf, dir) {
 /* ============================== 顺势过滤（入场质量闸门） ==============================
  * 背景（2026-11-11 实测）：近 36h 671 笔入场中 663 笔（98.8%）形态分为 0 —— 纯 MACD 零轴翻转硬开，
  *   完全不看趋势位置。结果风控上线后首小时出现「止盈 5 笔 / 止损类 94 笔」的灾难比例。
- * 修正：入场必须顺势 —— 做多要求 价格 > MA20、MA5 > MA20、MA20 不明显低于 MA60；
- *   做空完全对称。这挡掉"下跌途中抄底做多/上涨途中追空"的逆势单（亏损主源）。
+ * 判定（v2，2026-11-11 修正）：零轴翻转是「趋势反转」信号，天然发生在价格尚未站上 MA20 时，
+ *   若要求 px>MA20 会把入场全部堵死（实测 16:45 窗口 0 笔新开仓）。故改用两条更本质的判据：
+ *     · 大方向不深跌/不暴涨：px 不跌破 MA60 的 1%（多头），空头对称 → 挡下跌途中抄底
+ *     · 中期斜率转向：MA20 近 3 根不再下行（多头），空头对称 → 挡逆势硬扛
+ *   这允许"反转初期（px 刚穿过 MA60、MA20 转平）"入场，同时拒绝"深跌中的反弹"。
  * 数据不足（<65 根）或缓存非当前K线时放行，避免新上市合约与刚刷新时完全不开仓。
  * 开关：PYR.TREND_FILTER；加仓同理见 PYR.ADD_LOSS_TREND_ONLY。 */
 function pyrTrendOk(inst, tf, dir) {
@@ -287,11 +290,11 @@ function pyrTrendOk(inst, tf, dir) {
   if (!b || !b.c || b.c.length < 65) return true;                 // 数据不足：不拦
   if (b.barTs !== pyrBarStart(tf.id, Date.now())) return true;    // 缓存非当前K线：不拦
   const c = b.c, i = c.length - 1;
-  const ma5 = maSeries(c, 5), ma20 = maSeries(c, 20), ma60 = maSeries(c, 60);
-  if (!okNum(ma5[i]) || !okNum(ma20[i]) || !okNum(ma60[i])) return true;
+  const ma20 = maSeries(c, 20), ma60 = maSeries(c, 60);
+  if (!okNum(ma20[i]) || !okNum(ma60[i]) || !okNum(ma20[i - 3])) return true;
   const px = c[i];
   if (dir > 0) {
-    return px > ma20[i] && ma5[i] > ma20[i] && ma20[i] >= ma60[i] * 0.995;
+    return px > ma60[i] * 0.99 && ma20[i] >= ma20[i - 3];
   }
-  return px < ma20[i] && ma5[i] < ma20[i] && ma20[i] <= ma60[i] * 1.005;
+  return px < ma60[i] * 1.01 && ma20[i] <= ma20[i - 3];
 }
