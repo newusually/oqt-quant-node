@@ -293,8 +293,9 @@ function pyrTrendOk(inst, tf, dir) {
   const ma20 = maSeries(c, 20), ma60 = maSeries(c, 60);
   if (!okNum(ma20[i]) || !okNum(ma60[i]) || !okNum(ma20[i - 3])) return true;
   const px = c[i];
-  if (dir > 0) {
-    return px > ma60[i] * 0.99 && ma20[i] >= ma20[i - 3];
-  }
-  return px < ma60[i] * 1.01 && ma20[i] <= ma20[i - 3];
+  /* v3（2026-11-11）：只拦「深跌抄底 / 暴涨追空」，不拦反转初期。
+   *   实测 v2 拦截率 82%~100%（零轴翻转天然发生在 MA20/MA60 另一侧），等于把入场堵死。
+   *   改为距离 MA60 3% 以内的容差：下跌超过 3% 仍禁止做多，上涨超过 3% 仍禁止做空。 */
+  if (dir > 0) return px > ma60[i] * 0.97;
+  return px < ma60[i] * 1.03;
 }
