@@ -46,7 +46,7 @@
     st.setAttribute('data-ftable', '1');
     st.textContent =
       /* 滚动容器（交易列表同款深底 + 边框 + 圆角） */
-      '.ftbl-wrap{overflow:auto;border:1px solid #263553;border-radius:8px;background:#0c1729;margin-bottom:6px}' +
+      '.ftbl-wrap{overflow:auto;border:1px solid #263553;border-radius:8px;background:#0c1729;margin-bottom:6px;isolation:isolate}' +
       /* 表格本体 = 交易列表样式 */
       'table.ftbl{width:100%;border-collapse:collapse;font-size:11.5px}' +
       '.ftbl thead th{background:#1b2a45;color:#a9c2ee;text-align:right;padding:6px 9px;position:sticky;top:0;white-space:nowrap;z-index:1;font-weight:700}' +
