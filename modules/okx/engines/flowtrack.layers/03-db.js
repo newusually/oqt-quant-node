@@ -36,7 +36,8 @@ function initDb() {
   db.exec(`CREATE TABLE IF NOT EXISTS pyr(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pid TEXT, inst_id TEXT, tf TEXT, dir INTEGER, event TEXT,
-      ts INTEGER, px REAL, qty REAL, cost REAL, unreal REAL, net_bp REAL)`);
+      ts INTEGER, px REAL, qty REAL, cost REAL, unreal REAL, net_bp REAL,
+      note TEXT)`);
   db.exec('CREATE INDEX IF NOT EXISTS ix_pyr_inst ON pyr(inst_id)');
   db.exec('CREATE INDEX IF NOT EXISTS ix_pyr_pid ON pyr(pid)');
   db.exec('CREATE INDEX IF NOT EXISTS ix_pyr_ts ON pyr(ts)');
@@ -44,7 +45,12 @@ function initDb() {
   db.exec(`CREATE TABLE IF NOT EXISTS pyr_open(
       pid TEXT PRIMARY KEY, inst_id TEXT, tf TEXT, dir INTEGER,
       entry_ts INTEGER, entry_px REAL, total_qty REAL, total_cost REAL,
-      adds INTEGER, last_add_ts INTEGER, closed INTEGER)`);
+      adds INTEGER, last_add_ts INTEGER, closed INTEGER,
+      adds_strong INTEGER DEFAULT 0, strong INTEGER DEFAULT 0)`);
+  /* ★老库平滑升级：pyr.note（加仓原因/倍数）、pyr_open 强单字段；已存在时报错忽略 */
+  try { db.exec('ALTER TABLE pyr ADD COLUMN note TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE pyr_open ADD COLUMN adds_strong INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('ALTER TABLE pyr_open ADD COLUMN strong INTEGER DEFAULT 0'); } catch (e) { }
   /* ★实时持仓曲线采样：每 30 秒落一次全部未平仓金字塔的实时净浮盈 USD（永久保留，不删） */
   db.exec(`CREATE TABLE IF NOT EXISTS pyr_equity(
       id INTEGER PRIMARY KEY AUTOINCREMENT,

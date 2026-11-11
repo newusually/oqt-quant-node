@@ -59,7 +59,7 @@ async function start() {
   console.log(`[ft] MACD(${CFG.MACD_FAST},${CFG.MACD_SLOW},${CFG.MACD_SIGNAL}) 定时刷新: ${macdQueue.length} 个合约；` +
     `★只 15m，每15分钟(:00/:15/:30/:45) 按K线边界跑一次全市场（约 ${estSec} 秒）`);
   console.log(`[ft] 数据保留：自 ${new Date(CFG.KEEP_FROM_TS).toISOString()} 起【永久保留】，无自动删除/VACUUM`);
-  console.log(`[ft] 交易规则：买多/卖空/加仓 每笔 ${PYR.ENTRY_USD} 美金；满1小时+浮亏>${PYR.ADD_LOSS_PCT}%(亏损)+出现买卖信号(零轴翻转)同向 加仓；浮盈>${PYR.TP_PCT}% 止盈`);
+  console.log(`[ft] 交易规则：买多/卖空 每笔 ${PYR.ENTRY_USD}U；加仓两级=①强信号(孔雀开屏/V反转/W双底/M头/放量/MACD加速) ${PYR.ADD_USD}U×2~5倍 间隔1根K线 可浮盈加(上限 ${PYR.ADD_STRONG_MAX}次/总投入${PYR.MAX_EXPO_USD}U) ②浮亏加仓 满1小时 每笔 ${PYR.ADD_USD}U；止盈 ${PYR.TP_PCT}%(强形态单 ${PYR.TP_PCT_STRONG}%)`);
 
   /* AI 策略文件热加载：启动读一次，之后每 30 秒检查 mtime */
   aiRead(true);

@@ -15,19 +15,20 @@ function walCheckpointOnly() {
 /* 批量落库金字塔事件（买多/卖空/加仓/平仓）到 pyr 表 */
 function flush() {
   if (!db || !pendingPyr.length) return;
-  const ins = db.prepare('INSERT INTO pyr(pid,inst_id,tf,dir,event,ts,px,qty,cost,unreal,net_bp) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+  const ins = db.prepare('INSERT INTO pyr(pid,inst_id,tf,dir,event,ts,px,qty,cost,unreal,net_bp,note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
   let ok = 0, skipped = 0;
   try {
     db.exec('BEGIN');
     for (const t of pendingPyr) {
-      /* 单行坏数据不拖垮整批：跳过该行并记录，其余正常落库 */
+      /* 单行坏数据不拖垮整批：跳过该行并记录，其余正常落库（note 允许 null） */
       let bad = null;
-      for (let i = 0; i < t.length; i++) {
+      for (let i = 0; i < Math.min(t.length, 11); i++) {
         const v = t[i];
         if (v === undefined || (typeof v === 'number' && !isFinite(v))) { bad = { i: i, v: v }; break; }
       }
       if (bad) { skipped++; continue; }
-      try { ins.run(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], t[9], t[10]); ok++; }
+      const note = t[11] == null ? null : String(t[11]).slice(0, 160);
+      try { ins.run(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], t[9], t[10], note); ok++; }
       catch (e) { skipped++; }
     }
     db.exec('COMMIT');

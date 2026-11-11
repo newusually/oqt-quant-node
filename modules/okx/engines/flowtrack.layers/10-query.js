@@ -105,12 +105,13 @@ function pyrTrades(inst, page, marks) {
       px: +(+r.px).toFixed(6), qty: +(+r.qty).toFixed(8),
       cost: +(+r.cost).toFixed(6),
       unreal: r.unreal == null ? null : +(+r.unreal).toFixed(6),
-      netBp: r.net_bp == null ? null : +(+r.net_bp).toFixed(6)
+      netBp: r.net_bp == null ? null : +(+r.net_bp).toFixed(6),
+      note: r.note || ''
     };
   };
   if (marks) {
     const rows = db.prepare(
-      `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+      `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp, note
        FROM pyr WHERE ${where} ORDER BY ts ASC LIMIT 4000`).all(inst);
     return { ok: true, inst: inst, marks: true, count: rows.length, rows: rows.map(toRow) };
   }
@@ -120,7 +121,7 @@ function pyrTrades(inst, page, marks) {
   page = Math.min(page, totalPages);
   const off = (page - 1) * PER;
   const rows = db.prepare(
-    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp, note
      FROM pyr WHERE ${where} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(inst, PER, off);
   const sum = db.prepare(
     `SELECT COUNT(*) n,
@@ -235,7 +236,7 @@ function pyrAll(page, sort, order, tf, ev) {
   page = Math.min(page, totalPages);
   const off = (page - 1) * PER;
   const rows = db.prepare(
-    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp
+    `SELECT id, ts, pid, inst_id, tf, dir, event, px, qty, cost, unreal, net_bp, note
      FROM pyr WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...f.args, PER, off);
   const sum = db.prepare(
     `SELECT COUNT(*) n,
@@ -251,7 +252,8 @@ function pyrAll(page, sort, order, tf, ev) {
     event: r.event, eventLabel: pyrEventLabel(r),
     px: +(+r.px).toFixed(6), qty: +(+r.qty).toFixed(8), cost: +(+r.cost).toFixed(6),
     unreal: r.unreal == null ? null : +(+r.unreal).toFixed(6),
-    netBp: r.net_bp == null ? null : +(+r.net_bp).toFixed(6)
+    netBp: r.net_bp == null ? null : +(+r.net_bp).toFixed(6),
+    note: r.note || ''
   }));
   pyrEnrich(list);
   return {
@@ -314,7 +316,18 @@ function stats() {
       tpPct: PYR.TP_PCT,
       addLossPct: PYR.ADD_LOSS_PCT,
       addIntervalMs: PYR.ADD_INTERVAL_MS, addIntervalMin: PYR.ADD_INTERVAL_MS / 60000,
-      addRule: '距开仓/上次加仓满 1 小时 且 整仓浮亏 > 总投入 1% 且 当前 15m MACD 柱方向与持仓同向（买多仓柱>0 / 卖空仓柱<0，不要求零轴翻转） → 固定加仓 0.1 美金；同根K线只允许一次买多/卖空/加仓',
+      addRule: '两级加仓：①强信号（孔雀开屏/倒孔雀开屏·MA5上穿全部均线、V反转/倒V、W双底/M头、放量、MACD加速，形态分≥' +
+        PYR.STRONG_MIN_SCORE + '）→ 加仓 ' + PYR.ADD_USD + 'U ×2~5倍，间隔 ' +
+        (PYR.ADD_STRONG_INTERVAL_MS / 60000) + ' 分钟，允许浮盈加仓；上限：强加仓 ≤' + PYR.ADD_STRONG_MAX +
+        ' 次、总投入 ≤' + PYR.MAX_EXPO_USD + 'U、浮盈达止盈目标 ' + PYR.ADD_STRONG_PROFIT_STOP + '% 停加；' +
+        '②浮亏加仓（原口径）：满 1 小时 + 浮亏>' + PYR.ADD_LOSS_PCT + '% + MACD 柱同向 → ' + PYR.ADD_USD + 'U。同根K线只允许一次买多/卖空/加仓',
+      strongAdd: {
+        minScore: PYR.STRONG_MIN_SCORE, intervalMin: PYR.ADD_STRONG_INTERVAL_MS / 60000,
+        maxTimes: PYR.ADD_STRONG_MAX, maxExpoUsd: PYR.MAX_EXPO_USD,
+        profitStopPct: PYR.ADD_STRONG_PROFIT_STOP, tpPctStrong: PYR.TP_PCT_STRONG,
+        patterns: ['孔雀开屏', '倒孔雀开屏', '多头排列', '空头排列', 'V反转', '倒V反转', 'W双底突破', 'M头破位', '放量', 'MACD加速'],
+        multTable: { 2: 2, 3: 2.5, 4: 3, 5: 4, 6: 5 }
+      },
       entryRule: 'MACD(12,26,60) 柱：当前>0 且之前连续≥20根<0 → 买多；当前<0 且之前连续≥20根>0 → 卖空（★只 15m，按K线边界每15分钟定时判定）',
       keepForever: CFG.KEEP_FOREVER, keepFromTs: CFG.KEEP_FROM_TS,
       keepFrom: new Date(CFG.KEEP_FROM_TS).toISOString(),

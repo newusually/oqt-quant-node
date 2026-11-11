@@ -146,6 +146,10 @@
   var aiEvPage = 1, aiEvPer = 10;
   var EV_NAMES = { buy: '买入开多', sell: '卖出开空', add: '加仓', close: '平仓' };
   function evReason(s) {
+    /* ★引擎真实原因优先：加仓倍数 / 形态标签（孔雀开屏·V反转·W双底…）由服务端落库 note，不再靠前端猜 */
+    if (s.note) {
+      return s.note + (s.ev === 'close' ? '' : '；投入 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6));
+    }
     if (s.ev === 'buy') return '入场做多：MACD 零轴翻转（前≥20 根反向柱后翻多），按 15m K线边界执行，投入 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);
     if (s.ev === 'sell') return '入场做空：MACD 零轴翻转（前≥20 根反向柱后翻空），按 15m K线边界执行，投入 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);
     if (s.ev === 'add') return '加仓摊薄：满 1 小时 + 该轮浮亏 > 0 + 出现同向零轴翻转信号，加投 ' + num(s.cost, 4) + ' USD @ ' + num(s.px, 6);

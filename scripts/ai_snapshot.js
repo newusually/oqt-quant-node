@@ -50,7 +50,7 @@ const cfg = {
 };
 
 /* ===== 全量 Forensic 数据：逐轮交易明细 / 全部买卖信号 / 回测汇总（供 AI 强制归因 + 前端完整报表） ===== */
-const allRows = rows("SELECT id, pid, inst_id, tf, dir, event, ts, px, qty, cost, unreal, net_bp FROM pyr ORDER BY pid, ts, id");
+const allRows = rows("SELECT id, pid, inst_id, tf, dir, event, ts, px, qty, cost, unreal, net_bp, note FROM pyr ORDER BY pid, ts, id");
 const byPid = {};
 for (const r of allRows) { (byPid[r.pid] = byPid[r.pid] || []).push(r); }
 const trades = [];
@@ -90,7 +90,8 @@ const signals = allRows.map(function (r) {
     ev: r.event, dir: (+r.dir > 0 ? '多' : '空'),
     px: +(+r.px).toFixed(6), qty: +(+r.qty).toFixed(8),
     cost: +(+r.cost).toFixed(6),
-    net: r.event === 'close' ? +(+r.net_bp).toFixed(6) : null
+    net: r.event === 'close' ? +(+r.net_bp).toFixed(6) : null,
+    note: r.note || ''
   };
 });
 const closed = trades.filter(function (t) { return t.outcome !== '持仓中'; });
