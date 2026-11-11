@@ -206,13 +206,16 @@ function scan() {
         addNote = '强信号×' + pat.mult + ' ' + pat.tags.join('+') + '（形态分' + pat.score + '）';
         isStrongAdd = true;
       }
-      /* ② 基础浮亏加仓：保持原口径（浮亏 + 满 1 小时 + 零轴翻转同向） */
+      /* ② 基础浮亏加仓：保持原口径（浮亏 + 满 1 小时 + 零轴翻转同向）
+       *   ★2026-11-11 增补：加仓也必须顺势（ADD_LOSS_TREND_ONLY）——逆势单摊薄等于加速亏损，
+       *   逆势亏损单交给硬止损/快速试错处理，不再追加投入。 */
       else if (loss > p.totalCost * PYR.ADD_LOSS_PCT / 100 &&
           sameDir &&
           (p.adds || 0) < (PYR.ADD_MAX_TIMES || 18) &&
-          (now - sinceTs) >= PYR.ADD_INTERVAL_MS) {
+          (now - sinceTs) >= PYR.ADD_INTERVAL_MS &&
+          (!PYR.ADD_LOSS_TREND_ONLY || pyrTrendOk(p.instId, sigTf, p.dir))) {
         addUsd = Math.min(PYR.ADD_USD, expoLeft);
-        addNote = '浮亏加仓（浮亏' + (p.totalCost > 0 ? (loss / p.totalCost * 100).toFixed(1) : '0') + '%）';
+        addNote = '浮亏加仓·顺势（浮亏' + (p.totalCost > 0 ? (loss / p.totalCost * 100).toFixed(1) : '0') + '%）';
       }
     }
     if (addUsd > 0) {
@@ -316,6 +319,8 @@ function scan() {
     for (const tf of PYR.TFS) {
       const dir = pyrEntrySignal(inst, tf);
       if (!dir) continue;
+      /* ★顺势过滤（2026-11-11）：逆势单是亏损主源（实测止盈 5 : 止损 94），直接不开口。 */
+      if (PYR.TREND_FILTER && !pyrTrendOk(inst, tf, dir)) continue;
       const key = inst + '|' + tf.id + '|' + dir;
       if (pyrActive.has(key)) continue;           // 同一合约·周期·方向只允许一个金字塔
       /* ★平仓后冷却：同合约·同周期 1 根K线内不再开仓，避免反复开仓/平仓抖动 */
