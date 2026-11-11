@@ -86,4 +86,8 @@ const pyrCloseAt = new Map();
  *   pyrPruneWin 记录本批淘汰所属窗口标识；pyrPruneCnt 记录该窗口已淘汰数量，达到配额即停。 */
 let pyrPruneWin = 0;
 let pyrPruneCnt = 0;
+/* ★入场诊断（2026-11-11）：每窗口统计候选信号数与拦截原因，定位"为何不开仓"。
+ *   cand=翻转信号数, trend=被顺势过滤拦, taken=同根K线槽已占, cool=平仓冷却中, opened=实际开仓 */
+let pyrEntryDiag = { cand: 0, trend: 0, taken: 0, cool: 0, opened: 0, hardStop: 0, held: 0 };
+let pyrDiagAt = 0;   // 入场诊断上次打印时间（30 秒节流）
 

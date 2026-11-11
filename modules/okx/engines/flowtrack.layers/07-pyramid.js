@@ -198,8 +198,9 @@ function scan() {
     if (inWindow && barFree && expoLeft > 0.01) {
       /* ① 强信号加权加仓：形态好+MACD同向+未接近止盈+次数/间隔达标 */
       if (strong && macdDir === p.dir &&
-          (p.addsStrong || 0) < (PYR.ADD_STRONG_MAX || 6) &&
+          (p.addsStrong || 0) < (PYR.ADD_STRONG_MAX || 3) &&
           (p.adds || 0) < (PYR.ADD_MAX_TIMES || 18) &&
+          pnlPct >= (PYR.STRONG_ADD_MIN_PNL_PCT === undefined ? -1.5 : PYR.STRONG_ADD_MIN_PNL_PCT) &&
           profitRatio < (PYR.ADD_STRONG_PROFIT_STOP || 60) / 100 &&
           (now - sinceTs) >= (PYR.ADD_STRONG_INTERVAL_MS || 900000)) {
         addUsd = Math.min(PYR.ADD_USD * pat.mult, expoLeft);
@@ -305,7 +306,7 @@ function scan() {
   /* ---- 2) 新开仓：MACD 零轴翻转信号（★只 15m，买多+卖空都开）---- */
   /* ★只在边界窗口内执行：窗口外绝不新开仓，保证买卖节奏严格为每 15 分钟一次。 */
   if (inWindow) for (const inst of universe) {
-    if (pyramids.size >= (PYR.MAX_OPEN_HARD || 200)) break;   // 硬上限兜底，防止无界扩张
+    if (pyramids.size >= (PYR.MAX_OPEN_HARD || 600)) { pyrEntryDiag.hardStop++; break; }   // 硬上限兜底（须高于实际并发，否则新信号被挡死）
     if (isStableInst(inst) || isZeroVolInst(inst)) continue;
     const b = books.get(inst);
     if (!b || !b.bids.length || !b.asks.length) continue;
@@ -319,13 +320,14 @@ function scan() {
     for (const tf of PYR.TFS) {
       const dir = pyrEntrySignal(inst, tf);
       if (!dir) continue;
-      /* ★顺势过滤（2026-11-11）：逆势单是亏损主源（实测止盈 5 : 止损 94），直接不开口。 */
-      if (PYR.TREND_FILTER && !pyrTrendOk(inst, tf, dir)) continue;
+      pyrEntryDiag.cand++;
       const key = inst + '|' + tf.id + '|' + dir;
-      if (pyrActive.has(key)) continue;           // 同一合约·周期·方向只允许一个金字塔
+      if (pyrActive.has(key)) { pyrEntryDiag.held = (pyrEntryDiag.held || 0) + 1; continue; }  // 同合约·周期·方向已有仓
+      /* ★顺势过滤（2026-11-11）：逆势单是亏损主源（实测止盈 5 : 止损 94），直接不开口。 */
+      if (PYR.TREND_FILTER && !pyrTrendOk(inst, tf, dir)) { pyrEntryDiag.trend++; continue; }
       /* ★平仓后冷却：同合约·同周期 1 根K线内不再开仓，避免反复开仓/平仓抖动 */
-      if (now - (pyrCloseAt.get(inst + '|' + tf.id) || 0) < CFG.REOPEN_COOLDOWN_MS) continue;
-      if (pyrBarTaken(inst, tf.id, now)) continue; // ★同根K线只允许一次买多/卖空/加仓
+      if (now - (pyrCloseAt.get(inst + '|' + tf.id) || 0) < CFG.REOPEN_COOLDOWN_MS) { pyrEntryDiag.cool++; continue; }
+      if (pyrBarTaken(inst, tf.id, now)) { pyrEntryDiag.taken++; continue; } // ★同根K线只允许一次买多/卖空/加仓
       const entryPx = dir > 0 ? ask : bid;
       const initQty = PYR.ENTRY_USD / entryPx;
       const fee0 = PYR.ENTRY_USD * feeRate;
@@ -347,10 +349,21 @@ function scan() {
         +initQty.toFixed(8), +PYR.ENTRY_USD.toFixed(6), 0, -fee0,
         'MACD零轴翻转' + (pat0.tags.length ? ' + ' + pat0.tags.join('+') + '（形态分' + pat0.score + '）' : ''));
       openDirty = true;
+      pyrEntryDiag.opened++;
     }
   }
 
   /* ---- 3) 持仓状态增量落库（重启不丢未平仓金字塔）---- */
   if (openDirty) persistOpen();
+
+  /* ---- 4) 入场诊断（每 30 秒一条，仅开仓窗口内）：定位"为什么不开仓" ---- */
+  if (inWindow && (now - pyrDiagAt) >= 30000) {
+    pyrDiagAt = now;
+    const dg = pyrEntryDiag;
+    console.log('[pyr] 入场诊断 候选' + dg.cand + ' 开仓' + dg.opened +
+      ' ｜ 顺势拦' + dg.trend + ' 已有仓' + (dg.held || 0) + ' 冷却' + dg.cool + ' 槽占' + dg.taken +
+      (dg.hardStop ? ' 硬顶阻断' : '') + ' ｜ 并发' + pyramids.size + '/' + (PYR.MAX_OPEN_POS || 150));
+    pyrEntryDiag = { cand: 0, trend: 0, taken: 0, cool: 0, opened: 0, hardStop: 0, held: 0 };
+  }
 }
 
